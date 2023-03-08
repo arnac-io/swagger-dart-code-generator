@@ -25,13 +25,13 @@ environment:
 
 dependencies:
   build: ^2.3.1
-  path: ^1.8.3
+  path: ^1.8.2
   markdown: '>=5.0.0 <8.0.0'
   recase: ^4.1.0
   json_annotation: ^4.8.0
   universal_io: ^2.2.0
-  collection: ^1.17.1
-  dart_style: ^2.2.5
+  collection: ^1.17.0
+  dart_style: ^2.3.0
   code_builder: ^4.4.0
   http: ^0.13.5
   yaml: ^3.1.1
