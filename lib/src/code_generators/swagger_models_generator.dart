@@ -1274,6 +1274,8 @@ String toString() => jsonEncode(this);
         : '';
 
     final fromJson = generatedFromJson(schema, validatedClassName);
+    final toJson = generatedToJson(schema, validatedClassName);
+    // final toJson = \tMap<String, dynamic> toJson() => _\$${validatedClassName}ToJson(this);
 
     final generatedClass = '''
 @JsonSerializable(explicitToJson: true)
@@ -1283,7 +1285,7 @@ class $validatedClassName{
 $generatedProperties
 \tstatic const fromJsonFactory = _\$${validatedClassName}FromJson;
 \tstatic const toJsonFactory = _\$${validatedClassName}ToJson;
-\tMap<String, dynamic> toJson() => _\$${validatedClassName}ToJson(this);
+\n\t$toJson\n
 
 $equalsOverride
 
@@ -1297,7 +1299,41 @@ $copyWithMethod
     return generatedClass;
   }
 
+  String generatedToJson(SwaggerSchema schema, String validatedClassName) {
+    final hasMapping = schema.discriminator?.mapping.isNotEmpty ?? false;
+    if (hasMapping) {
+      return 'Map<String, dynamic> toJson() =>'
+          '_\$${validatedClassName}ToJson(this)'
+      '\t\t\t${schema.discriminator!.mapping.entries.map(
+              (entry) => '\n..addAll(${entry.key}?.toJson() ?? {})').join('\n')};';
+    }
+    return 'Map<String, dynamic> toJson() => _\$${validatedClassName}ToJson(this);';
+  }
   String generatedFromJson(SwaggerSchema schema, String validatedClassName) {
+    final hasMapping = schema.discriminator?.mapping.isNotEmpty ?? false;
+    if (hasMapping) {
+      final discriminator = schema.discriminator!;
+      final propertyName = discriminator.propertyName;
+      final responseVar = validatedClassName.camelCase;
+
+      return
+       '${discriminator.mapping.entries.map(
+            (entry) => '${entry.value.getRef()}? ${entry.key};'
+       ).join('\n')}'
+       '\n\n'
+        'factory $validatedClassName.fromJson(Map<String, dynamic> json) {'
+          '\t\tvar $responseVar = _\$${validatedClassName}FromJson(json);'
+          '\t\tswitch (json[\'$propertyName\']) {'
+          '\t\t\t${discriminator.mapping.entries.map(
+              (entry) => 'case \'${entry.key}\': $responseVar.${entry.key} = _\$${entry.value
+              .split('/')
+              .last
+              .pascalCase}FromJson(json); break;').join('\n')}'
+          // '\t\t\tdefault: return _\$${validatedClassName}FromJson(json);\n'
+          '\t\t}'
+          '\treturn $responseVar;'
+          '}';
+    }
     return 'factory $validatedClassName.fromJson(Map<String, dynamic> json) => _\$${validatedClassName}FromJson(json);';
   }
 

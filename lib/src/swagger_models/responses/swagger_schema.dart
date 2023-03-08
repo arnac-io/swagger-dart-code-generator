@@ -24,6 +24,7 @@ class SwaggerSchema {
     this.isNullable = false,
     this.hasAdditionalProperties = false,
     this.msEnum,
+    this.discriminator,
   });
 
   @JsonKey(name: 'type', defaultValue: '')
@@ -53,6 +54,9 @@ class SwaggerSchema {
 
   @JsonKey(name: 'x-ms-enum', defaultValue: null)
   MsEnum? msEnum;
+
+  @JsonKey(name: 'discriminator', defaultValue: null)
+  Discriminator? discriminator;
 
   List<String> get enumValues {
     final values = (msEnum?.values.isNotEmpty == true
@@ -150,4 +154,19 @@ class MsEnumValue {
 
   factory MsEnumValue.fromJson(Map<String, dynamic> json) =>
       _$MsEnumValueFromJson(json);
+}
+
+@JsonSerializable()
+class Discriminator {
+  Discriminator({this.propertyName = '', this.mapping = const {}});
+
+  @JsonKey(name: 'propertyName', defaultValue: '')
+  String propertyName;
+  @JsonKey(name: 'mapping', defaultValue: {})
+  Map<String, String> mapping;
+
+  factory Discriminator.fromJson(Map<String, dynamic> json) =>
+      _$DiscriminatorFromJson(json);
+
+  Map<String, dynamic> toJson() => _$DiscriminatorToJson(this);
 }
