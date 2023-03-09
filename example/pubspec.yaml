@@ -10,6 +10,7 @@ dependencies:
   chopper: ^5.0.0
   
 dev_dependencies:
+  test: ^1.23.1
   swagger_dart_code_generator:
     path: ../
   chopper_generator: ^5.0.0+1

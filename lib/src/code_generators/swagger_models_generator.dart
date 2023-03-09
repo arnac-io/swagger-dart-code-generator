@@ -1273,6 +1273,7 @@ String toString() => jsonEncode(this);
 '''
         : '';
 
+    final hasMapping = schema.discriminator?.mapping.isNotEmpty ?? false;
     final fromJson = generatedFromJson(schema, validatedClassName);
     final toJson = generatedToJson(schema, validatedClassName);
     // final toJson = \tMap<String, dynamic> toJson() => _\$${validatedClassName}ToJson(this);
@@ -1283,8 +1284,8 @@ class $validatedClassName{
 \t$validatedClassName($generatedConstructorProperties);\n
 \t$fromJson\n
 $generatedProperties
-\tstatic const fromJsonFactory = _\$${validatedClassName}FromJson;
-\tstatic const toJsonFactory = _\$${validatedClassName}ToJson;
+\tstatic const fromJsonFactory = _\$${validatedClassName}FromJson${hasMapping ? 'Fix' : ''};
+\tstatic const toJsonFactory = _\$${validatedClassName}ToJson${hasMapping ? 'Fix' : ''};
 \n\t$toJson\n
 
 $equalsOverride
@@ -1302,13 +1303,15 @@ $copyWithMethod
   String generatedToJson(SwaggerSchema schema, String validatedClassName) {
     final hasMapping = schema.discriminator?.mapping.isNotEmpty ?? false;
     if (hasMapping) {
-      return 'Map<String, dynamic> toJson() =>'
+      return 'static Map<String, dynamic> _\$${validatedClassName}ToJsonFix($validatedClassName instance) { return instance.toJson();}\n\n'
+        'Map<String, dynamic> toJson() =>'
           '_\$${validatedClassName}ToJson(this)'
       '\t\t\t${schema.discriminator!.mapping.entries.map(
               (entry) => '\n..addAll(${entry.key}?.toJson() ?? {})').join('\n')};';
     }
     return 'Map<String, dynamic> toJson() => _\$${validatedClassName}ToJson(this);';
   }
+
   String generatedFromJson(SwaggerSchema schema, String validatedClassName) {
     final hasMapping = schema.discriminator?.mapping.isNotEmpty ?? false;
     if (hasMapping) {
@@ -1317,6 +1320,7 @@ $copyWithMethod
       final responseVar = validatedClassName.camelCase;
 
       return
+        'static $validatedClassName _\$${validatedClassName}FromJsonFix(Map<String, dynamic> json) { return $validatedClassName.fromJson(json);}\n\n'
        '${discriminator.mapping.entries.map(
             (entry) => '${entry.value.getRef()}? ${entry.key};'
        ).join('\n')}'

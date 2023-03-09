@@ -1,0 +1,102 @@
+{
+    "openapi": "3.0.2",
+    "info": {
+        "title": "Fordefi API",
+        "version": "0.1.0"
+    },
+    "servers": [
+        {
+            "url": "http://localhost:8000",
+            "description": "Local"
+        }
+    ],
+    "paths": {
+        "/api/v1/animals/{id}": {
+            "get": {
+                "summary": "Get Animal",
+                "operationId": "get_animal_api_v1_animal__id__get",
+                "parameters": [
+                    {
+                        "required": true,
+                        "schema": {
+                            "title": "Id",
+                            "type": "string",
+                            "description": "ID of the animal to retrieve.",
+                            "format": "uuid"
+                        },
+                        "name": "id",
+                        "in": "path"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GetAnimalResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "GetAnimalResponse": {
+                "title": "GetAnimalResponse",
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/Cat"
+                    },
+                    {
+                        "$ref": "#/components/schemas/Dog"
+                    }
+                ],
+                "discriminator": {
+                    "propertyName": "animal_type",
+                    "mapping": {
+                        "cat": "#/components/schemas/Cat",
+                        "dog": "#/components/schemas/Dog"
+                    }
+                }
+            },
+            "Cat": {
+                "title": "Cat",
+                "type": "object",
+                "properties": {
+                    "animal_type": {
+                        "title": "Animal Type",
+                        "enum": [
+                            "cat"
+                        ],
+                        "type": "string"
+                    },
+                    "name": {
+                        "title": "Name",
+                        "type": "string"
+                    }
+                }
+            },
+            "Dog": {
+                "title": "Dog",
+                "type": "object",
+                "properties": {
+                    "animal_type": {
+                        "title": "Animal Type",
+                        "enum": [
+                            "dog"
+                        ],
+                        "type": "string"
+                    },
+                    "name": {
+                        "title": "Name",
+                        "type": "string"
+                    }
+                }
+            }
+        }
+    }
+}
