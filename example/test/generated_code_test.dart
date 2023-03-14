@@ -10,7 +10,8 @@ import 'package:swagger_dart_code_generator/src/swagger_models/swagger_root.dart
 import 'package:test/test.dart';
 
 class MyInterceptor implements RequestInterceptor {
-  final token = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6Im9FVmMtcWJKTjJYWUkzejNzOTg5aCJ9.eyJodHRwczovL2ZvcmRlZmkuY29tL29yZ19pZCI6Im9yZ19pOVkzVVhrcnM4c1lSeTRwIiwiaHR0cHM6Ly9mb3JkZWZpLmNvbS9lbWFpbCI6ImRhdmlkQGZvcmRlZmkuY29tIiwiaXNzIjoiaHR0cHM6Ly9hdXRoLXN0YWdpbmcuc3RnLmFybmFjLmlvLyIsInN1YiI6Imdvb2dsZS1vYXV0aDJ8MTE2NzMyNzIxMzk3OTA1MjgxMTI2IiwiYXVkIjpbImh0dHBzOi8vYXBpLXN0YWdpbmcuc3RnLmFybmFjLmlvLyIsImh0dHBzOi8vZm9yZGVmaS1zdGFnaW5nLnVzLmF1dGgwLmNvbS91c2VyaW5mbyJdLCJpYXQiOjE2NzgzNTUyMzAsImV4cCI6MTY3ODQ0MTYzMCwiYXpwIjoiUXJMbWRlU1ZvSklvQUVLUTFmeUo0bjc5M1J3bXRyc24iLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIiwicGVybWlzc2lvbnMiOltdfQ.ABBVdudkfDFELfZJ8Q6lznrZm4WqQpQJv9H-AJ5ji3_iep6M2aBJc-FAR6SjomvzhKOB5e3g8cr_0u4KT6kdME3SaDZb7whoyWAY4r6DqFdOXA_ibqMvKeQ7QZq32YUUAYp0q75G-DctD6TRl1VUONOMaTYrZgvSG2ACY96cnyw2BZ7uBB3_-wnGpfMhlmejUomJscngvNeOsFhmK33DUc5WwoZxxG8tWuSI7YezfEFinKL_lCAP123iy4Un-D2bYwnGhUdCyIFJT78iRHVECkjZ1MHMpgYN-PvCHjUV2MyUUFXyuT9FTDPA7yJX3iFwwUCSsZqZkwajwjZQjpap0Q';
+  final token = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6Im9FVmMtcWJKTjJYWUkzejNzOTg5aCJ9.eyJodHRwczovL2ZvcmRlZmkuY29tL29yZ19pZCI6Im9yZ19pOVkzVVhrcnM4c1lSeTRwIiwiaHR0cHM6Ly9mb3JkZWZpLmNvbS9lbWFpbCI6ImRhdmlkQGZvcmRlZmkuY29tIiwiaXNzIjoiaHR0cHM6Ly9hdXRoLXN0YWdpbmcuc3RnLmFybmFjLmlvLyIsInN1YiI6Imdvb2dsZS1vYXV0aDJ8MTE2NzMyNzIxMzk3OTA1MjgxMTI2IiwiYXVkIjpbImh0dHBzOi8vYXBpLXN0YWdpbmcuc3RnLmFybmFjLmlvLyIsImh0dHBzOi8vZm9yZGVmaS1zdGFnaW5nLnVzLmF1dGgwLmNvbS91c2VyaW5mbyJdLCJpYXQiOjE2Nzg3MDI3ODAsImV4cCI6MTY3ODc4OTE4MCwiYXpwIjoiUXJMbWRlU1ZvSklvQUVLUTFmeUo0bjc5M1J3bXRyc24iLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIiwicGVybWlzc2lvbnMiOltdfQ.H-z7bds8_rvQL84G2ozL1w7QC9fpkGgIkyh6vgVtbWzF1LOvGQnH5272SGcHj2gISz9pvfLNVLCc1oiOQ6RWAmYCTbz131abkr0o7W5I4ELxplEnodTiSo9WmXejCLiND1fSQDyKY78n--ORgjLJDZ6GnAaitFBP4ytApZbQXrUbYzSHhgVD12tD6lbgI2iTtFN60NYXMyP4O_r-4jTJxSGGGDaA9LatzG6ubUqfz9-ZR5_5clZmzlc2mxEqSEYzQ-eMLPnS4kId14s8o_DKM2P7OjtgK84RAlnKMLiAeNZ1wPnYQa9R4BOCRjxdzTAy-TTzTNfuS0WEyYUZj5O7og';
+  // final token = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6Im9FVmMtcWJKTjJYWUkzejNzOTg5aCJ9.eyJodHRwczovL2ZvcmRlZmkuY29tL29yZ19pZCI6Im9yZ19pOVkzVVhrcnM4c1lSeTRwIiwiaHR0cHM6Ly9mb3JkZWZpLmNvbS9lbWFpbCI6ImRhdmlkQGZvcmRlZmkuY29tIiwiaXNzIjoiaHR0cHM6Ly9hdXRoLXN0YWdpbmcuc3RnLmFybmFjLmlvLyIsInN1YiI6Imdvb2dsZS1vYXV0aDJ8MTE2NzMyNzIxMzk3OTA1MjgxMTI2IiwiYXVkIjpbImh0dHBzOi8vYXBpLXN0YWdpbmcuc3RnLmFybmFjLmlvLyIsImh0dHBzOi8vZm9yZGVmaS1zdGFnaW5nLnVzLmF1dGgwLmNvbS91c2VyaW5mbyJdLCJpYXQiOjE2NzgzNTUyMzAsImV4cCI6MTY3ODQ0MTYzMCwiYXpwIjoiUXJMbWRlU1ZvSklvQUVLUTFmeUo0bjc5M1J3bXRyc24iLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIiwicGVybWlzc2lvbnMiOltdfQ.ABBVdudkfDFELfZJ8Q6lznrZm4WqQpQJv9H-AJ5ji3_iep6M2aBJc-FAR6SjomvzhKOB5e3g8cr_0u4KT6kdME3SaDZb7whoyWAY4r6DqFdOXA_ibqMvKeQ7QZq32YUUAYp0q75G-DctD6TRl1VUONOMaTYrZgvSG2ACY96cnyw2BZ7uBB3_-wnGpfMhlmejUomJscngvNeOsFhmK33DUc5WwoZxxG8tWuSI7YezfEFinKL_lCAP123iy4Un-D2bYwnGhUdCyIFJT78iRHVECkjZ1MHMpgYN-PvCHjUV2MyUUFXyuT9FTDPA7yJX3iFwwUCSsZqZkwajwjZQjpap0Q';
   // final token = 'Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6Im9FVmMtcWJKTjJYWUkzejNzOTg5aCJ9.eyJodHRwczovL2ZvcmRlZmkuY29tL29yZ19pZCI6Im9yZ19pOVkzVVhrcnM4c1lSeTRwIiwiaHR0cHM6Ly9mb3JkZWZpLmNvbS9lbWFpbCI6ImRhdmlkQGZvcmRlZmkuY29tIiwiaXNzIjoiaHR0cHM6Ly9hdXRoLXN0YWdpbmcuc3RnLmFybmFjLmlvLyIsInN1YiI6Imdvb2dsZS1vYXV0aDJ8MTE2NzMyNzIxMzk3OTA1MjgxMTI2IiwiYXVkIjpbImh0dHBzOi8vYXBpLXN0YWdpbmcuc3RnLmFybmFjLmlvLyIsImh0dHBzOi8vZm9yZGVmaS1zdGFnaW5nLnVzLmF1dGgwLmNvbS91c2VyaW5mbyJdLCJpYXQiOjE2NzgzNTUyMzAsImV4cCI6MTY3ODQ0MTYzMCwiYXpwIjoiUXJMbWRlU1ZvSklvQUVLUTFmeUo0bjc5M1J3bXRyc24iLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIiwicGVybWlzc2lvbnMiOltdfQ.ABBVdudkfDFELfZJ8Q6lznrZm4WqQpQJv9H-AJ5ji3_iep6M2aBJc-FAR6SjomvzhKOB5e3g8cr_0u4KT6kdME3SaDZb7whoyWAY4r6DqFdOXA_ibqMvKeQ7QZq32YUUAYp0q75G-DctD6TRl1VUONOMaTYrZgvSG2ACY96cnyw2BZ7uBB3_-wnGpfMhlmejUomJscngvNeOsFhmK33DUc5WwoZxxG8tWuSI7YezfEFinKL_lCAP123iy4Un-D2bYwnGhUdCyIFJT78iRHVECkjZ1MHMpgYN-PvCHjUV2MyUUFXyuT9FTDPA7yJX3iFwwUCSsZqZkwajwjZQjpap0Q';
 
   @override
@@ -33,7 +34,9 @@ void main() {
   //   }
   // }
 
-  final client = UsersOpenapi.create(
+  final client = OpenapiMobile.create(
+  // final client = UpdatedOpenapi.create(
+  // final client = UsersOpenapi.create(
       baseUrl: Uri.parse(baseUrl),
       interceptors: [
         MyInterceptor(),
@@ -68,6 +71,22 @@ void main() {
     "email": "david@fordefi.com",
     "state": "active",
     "is_new_device_provisioning": false
+
+    result:
+    apiV1UsersInfoGet json = {"person":{
+    "id":"43aa201b-8063-48f9-be40-3478fc5fcc7b",
+    "created_at":"2023-01-29T14:13:44.048Z",
+    "modified_at":"2023-02-26T15:50:54.216Z",
+    "role":"admin",
+    "user_type":"person",
+    "name":"David Tsah",
+    "email":"david@fordefi.com",
+    "state":"active",
+    "is_new_device_provisioning":false
+    },
+    "api_user":null,"api_signer":null,
+    "id":"43aa201b-8063-48f9-be40-3478fc5fcc7b","created_at":"2023-01-29T14:13:44.048Z","modified_at":"2023-02-26T15:50:54.216Z","role":"admin","user_type":"person","name":"David Tsah","email":"david@fordefi.com","state":"active","is_new_device_provisioning":false}
+
 }
 */
 
