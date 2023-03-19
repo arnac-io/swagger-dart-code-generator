@@ -30,7 +30,7 @@ dependencies:
   recase: ^4.1.0
   json_annotation: ^4.8.0
   universal_io: ^2.2.0
-  collection: ^1.17.0
+  collection: ^1.16.0
   dart_style: ^2.3.0
   code_builder: ^4.4.0
   http: ^0.13.5
