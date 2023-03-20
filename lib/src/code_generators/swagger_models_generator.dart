@@ -1307,7 +1307,7 @@ $copyWithMethod
         'Map<String, dynamic> toJson() =>'
           '_\$${validatedClassName}ToJson(this)'
       '\t\t\t${schema.discriminator!.mapping.entries.map(
-              (entry) => '\n..addAll(${entry.key}?.toJson() ?? {})').join('\n')};';
+              (entry) => '\n..addAll(${entry.key.camelCase}?.toJson() ?? {})').join('\n')};';
     }
     return 'Map<String, dynamic> toJson() => _\$${validatedClassName}ToJson(this);';
   }
@@ -1329,7 +1329,7 @@ $copyWithMethod
           '\t\tvar $responseVar = _\$${validatedClassName}FromJson(json);'
           '\t\tswitch (json[\'$propertyName\']) {'
           '\t\t\t${discriminator.mapping.entries.map(
-              (entry) => 'case \'${entry.key}\': $responseVar.${entry.key} = _\$${entry.value
+              (entry) => 'case \'${entry.key}\': $responseVar.${entry.key.camelCase} = _\$${entry.value
               .split('/')
               .last
               .pascalCase}FromJson(json); break;').join('\n')}'
