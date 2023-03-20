@@ -1322,7 +1322,7 @@ $copyWithMethod
       return
         'static $validatedClassName _\$${validatedClassName}FromJsonFix(Map<String, dynamic> json) { return $validatedClassName.fromJson(json);}\n\n'
        '${discriminator.mapping.entries.map(
-            (entry) => '${entry.value.getRef()}? ${entry.key};'
+            (entry) => '${entry.value.getRef()}? ${entry.key.camelCase};'
        ).join('\n')}'
        '\n\n'
         'factory $validatedClassName.fromJson(Map<String, dynamic> json) {'
