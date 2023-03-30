@@ -1307,7 +1307,7 @@ $copyWithMethod
         'Map<String, dynamic> toJson() =>'
           '_\$${validatedClassName}ToJson(this)'
       '\t\t\t${schema.discriminator!.mapping.entries.map(
-              (entry) => '\n..addAll(${entry.key.camelCase}?.toJson() ?? {})').join('\n')};';
+              (entry) => '\n..addAll(${entry.key == 'dynamic' ? 'dynamicField' : entry.key.camelCase}?.toJson() ?? {})').join('\n')};';
     }
     return 'Map<String, dynamic> toJson() => _\$${validatedClassName}ToJson(this);';
   }
@@ -1322,14 +1322,14 @@ $copyWithMethod
       return
         'static $validatedClassName _\$${validatedClassName}FromJsonFix(Map<String, dynamic> json) { return $validatedClassName.fromJson(json);}\n\n'
        '${discriminator.mapping.entries.map(
-            (entry) => '${entry.value.getRef()}? ${entry.key.camelCase};'
+            (entry) => '${entry.value.getRef()}? ${entry.key == 'dynamic' ? 'dynamicField' : entry.key.camelCase};'
        ).join('\n')}'
        '\n\n'
         'factory $validatedClassName.fromJson(Map<String, dynamic> json) {'
           '\t\tvar $responseVar = _\$${validatedClassName}FromJson(json);'
           '\t\tswitch (json[\'$propertyName\']) {'
           '\t\t\t${discriminator.mapping.entries.map(
-              (entry) => 'case \'${entry.key}\': $responseVar.${entry.key.camelCase} = _\$${entry.value
+              (entry) => 'case \'${entry.key}\': $responseVar.${entry.key == 'dynamic' ? 'dynamicField' : entry.key.camelCase} = _\$${entry.value
               .split('/')
               .last
               .pascalCase}FromJson(json); break;').join('\n')}'
