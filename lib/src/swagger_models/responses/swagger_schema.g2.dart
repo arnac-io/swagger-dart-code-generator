@@ -13,7 +13,7 @@ SwaggerSchema _$SwaggerSchemaFromJson(Map<String, dynamic> json) =>
       enumValuesObj: json['enum'] as List<dynamic>? ?? [],
       properties: (json['properties'] as Map<String, dynamic>?)?.map(
             (k, e) =>
-                MapEntry(k, SwaggerSchema.fromJson(e as Map<String, dynamic>)),
+                MapEntry(k, _$SwaggerSchemaFromJson(e as Map<String, dynamic>)),
           ) ??
           {},
       items: json['items'] == null
