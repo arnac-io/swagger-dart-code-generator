@@ -1326,7 +1326,7 @@ $copyWithMethod
        ).join('\n')}'
        '\n\n'
         'factory $validatedClassName.fromJson(Map<String, dynamic> json) {'
-          '\t\tvar $responseVar = _\$${validatedClassName}FromJson(json);'
+          '\t\tvar $responseVar = $validatedClassName();'
           '\t\tswitch (json[\'$propertyName\']) {'
           '\t\t\t${discriminator.mapping.entries.map(
               (entry) => 'case \'${entry.key}\': $responseVar.${entry.key == 'dynamic' ? 'dynamicField' : entry.key.camelCase} = _\$${entry.value
