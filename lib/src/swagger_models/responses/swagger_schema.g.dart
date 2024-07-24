@@ -8,32 +8,32 @@ part of 'swagger_schema.dart';
 
 SwaggerSchema _$SwaggerSchemaFromJson(Map<String, dynamic> json) =>
     SwaggerSchema(
-      type: json['type'] as String? ?? '',
-      originalRef: json['originalRef'] as String? ?? '',
-      enumValuesObj: json['enum'] as List<dynamic>? ?? const [],
-      properties: (json['properties'] as Map<String, dynamic>?)?.map(
-            (k, e) =>
-                MapEntry(k, SwaggerSchema.fromJson(e as Map<String, dynamic>)),
+          type: json['type'],
+          originalRef: json['originalRef'] as String? ?? '',
+          enumValuesObj: json['enum'] as List<dynamic>? ?? const [],
+          properties: (json['properties'] as Map<String, dynamic>?)?.map(
+                    (k, e) =>
+                    MapEntry(k, SwaggerSchema.fromJson(e as Map<String, dynamic>)),
           ) ??
-          const {},
-      items: json['items'] == null
-          ? null
-          : SwaggerSchema.fromJson(json['items'] as Map<String, dynamic>),
-      ref: json[r'$ref'] as String? ?? '',
-      defaultValue: json['default'],
-      format: json['format'] as String? ?? '',
-      schema: json['schema'] == null
-          ? null
-          : SwaggerSchema.fromJson(json['schema'] as Map<String, dynamic>),
-      oneOf: (json['oneOf'] as List<dynamic>?)
+              const {},
+          items: json['items'] == null
+              ? null
+              : SwaggerSchema.fromJson(json['items'] as Map<String, dynamic>),
+          ref: json[r'$ref'] as String? ?? '',
+          defaultValue: json['default'],
+          format: json['format'] as String? ?? '',
+          schema: json['schema'] == null
+              ? null
+              : SwaggerSchema.fromJson(json['schema'] as Map<String, dynamic>),
+          oneOf: (json['oneOf'] as List<dynamic>?)
               ?.map((e) => SwaggerSchema.fromJson(e as Map<String, dynamic>))
               .toList() ??
-          const [],
-      anyOf: (json['anyOf'] as List<dynamic>?)
+              const [],
+          anyOf: (json['anyOf'] as List<dynamic>?)
               ?.map((e) => SwaggerSchema.fromJson(e as Map<String, dynamic>))
               .toList() ??
-          const [],
-      allOf: (json['allOf'] as List<dynamic>?)
+              const [],
+          allOf: (json['allOf'] as List<dynamic>?)
               ?.map((e) => SwaggerSchema.fromJson(e as Map<String, dynamic>))
               .toList() ??
           const [],
@@ -89,22 +89,22 @@ Map<String, dynamic> _$SwaggerSchemaToJson(SwaggerSchema instance) =>
 
 MsEnum _$MsEnumFromJson(Map<String, dynamic> json) => MsEnum(
       values: (json['values'] as List<dynamic>?)
-              ?.map((e) => MsEnumValue.fromJson(e as Map<String, dynamic>))
-              .toList() ??
+          ?.map((e) => MsEnumValue.fromJson(e as Map<String, dynamic>))
+          .toList() ??
           const [],
-    );
+);
 
 Map<String, dynamic> _$MsEnumToJson(MsEnum instance) => <String, dynamic>{
       'values': instance.values,
-    };
+};
 
 MsEnumValue _$MsEnumValueFromJson(Map<String, dynamic> json) => MsEnumValue(
       value: json['value'] ?? const [],
-    );
+);
 
 Map<String, dynamic> _$MsEnumValueToJson(MsEnumValue instance) =>
     <String, dynamic>{
-      'value': instance.value,
+          'value': instance.value,
     };
 
 Discriminator _$DiscriminatorFromJson(Map<String, dynamic> json) =>
