@@ -93,6 +93,10 @@ const $name(this.value);
       result = '\$$result';
     }
 
+    if (result == 'value') {
+      result = 'enumValue';
+    }
+
     if (result.isEmpty) {
       result = 'undefined';
     }
