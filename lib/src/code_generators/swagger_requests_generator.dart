@@ -118,7 +118,7 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
         ..optionalParameters.add(Parameter(
           (p) => p
             ..named = true
-            ..type = Reference('Iterable<dynamic>?')
+            ..type = Reference('List<Interceptor>?')
             ..name = 'interceptors',
         ))
         ..body = Code(body),
@@ -173,9 +173,11 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
           method: requestType,
           modelPostfix: options.modelPostfix,
           swaggerRoot: swaggerRoot,
-          overridenResponses: options.responseOverrideValueMap
-              .asMap()
-              .map((key, value) => MapEntry(value.url, value)),
+          overridenResponses: Map.fromEntries(
+            options.responseOverrideValueMap
+              .where((v) => v.method.isEmpty || v.method == requestType)
+              .map((v) => MapEntry(v.url, v)),
+          ),
         );
 
         final String returns;
@@ -325,46 +327,49 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
       }
     }
 
-    //Models from response
-    final successResponse = getSuccessedResponse(responses: request.responses);
-    final responseRef = successResponse?.anyRef ?? '';
+    //Models from responses
+    final successResponses =
+        getSuccessedResponses(responses: request.responses);
+    for (final successResponse in successResponses) {
+      final responseRef = successResponse.anyRef;
 
-    if (responseRef.isNotEmpty) {
-      final schema = root.allSchemas[responseRef.getUnformattedRef()];
+      if (responseRef.isNotEmpty) {
+        final schema = root.allSchemas[responseRef.getUnformattedRef()];
 
-      if (schema?.type == kArray) {
-        if (schema?.items?.ref.isNotEmpty == true) {
-          final ref = schema!.items!.ref;
-          final itemType = getValidatedClassName(ref.getUnformattedRef());
-          results.add(itemType);
+        if (schema?.type == kArray) {
+          if (schema?.items?.ref.isNotEmpty == true) {
+            final ref = schema!.items!.ref;
+            final itemType = getValidatedClassName(ref.getUnformattedRef());
+            results.add(itemType);
+          } else {
+            final itemsType = schema?.items?.type;
+
+            if (!kBasicTypes.contains(itemsType) &&
+                schema?.items?.properties != null) {
+              final itemClassName = '$response\$Item';
+
+              results.add(itemClassName);
+            }
+          }
         } else {
-          final itemsType = schema?.items?.type;
+          if (!response.startsWith('$kMap<')) {
+            final neededResponse = response.removeListOrStream();
 
-          if (!kBasicTypes.contains(itemsType) &&
-              schema?.items?.properties != null) {
-            final itemClassName = '$response\$Item';
-
-            results.add(itemClassName);
+            if (!kBasicTypes.contains(neededResponse) &&
+                neededResponse != kDynamic) {
+              results.add(getValidatedClassName(neededResponse));
+            }
           }
         }
-      } else {
-        if (!response.startsWith('$kMap<')) {
-          final neededResponse = response.removeListOrStream();
-
-          if (!kBasicTypes.contains(neededResponse) &&
-              neededResponse != kDynamic) {
-            results.add(getValidatedClassName(neededResponse));
-          }
-        }
+      } else if (successResponse.schema?.properties.isNotEmpty == true) {
+        results.add(response);
+      } else if (successResponse.content?.schema?.properties.isNotEmpty ==
+          true) {
+        results.add(response);
+      } else if (successResponse.content?.schema?.allOf.isNotEmpty == true &&
+          successResponse.content?.schema?.title.isNotEmpty == true) {
+        results.add(response);
       }
-    } else if (successResponse?.schema?.properties.isNotEmpty == true) {
-      results.add(response);
-    } else if (successResponse?.content?.schema?.properties.isNotEmpty ==
-        true) {
-      results.add(response);
-    } else if (successResponse?.content?.schema?.allOf.isNotEmpty == true &&
-        successResponse?.content?.schema?.title.isNotEmpty == true) {
-      results.add(response);
     }
 
     return results.where((element) => _isValidModelName(element)).toList();
@@ -633,7 +638,7 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
         return getValidatedClassName(neededKey).asEnum();
       }
 
-      if (parameter.type == kArray) {
+      if (parameter.type == kArray || parameter.schema?.type == kArray) {
         final result = _getEnumParameterTypeName(
             parameterName: parameter.name,
             path: path,
@@ -957,7 +962,10 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
       final schema = requestBody.content?.schema;
 
       if (schema != null) {
-        if (schema.format == kBinary || schema.oneOf.isNotEmpty) {
+        if (schema.oneOf.length == 1) {
+          final oneOfRef = schema.oneOf.first.ref.getUnformattedRef();
+          typeName = getValidatedClassName(oneOfRef);
+        } else if (schema.format == kBinary || schema.oneOf.isNotEmpty) {
           typeName = kObject.pascalCase;
         } else if (schema.items?.type.isNotEmpty == true) {
           typeName = _mapParameterName(schema.items!.type, schema.items!.format,
@@ -1108,14 +1116,18 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
     return methodName;
   }
 
-  static SwaggerResponse? getSuccessedResponse({
+  static List<SwaggerResponse> getSuccessedResponses({
     required Map<String, SwaggerResponse> responses,
   }) {
     return responses.entries
-        .firstWhereOrNull((responseEntry) =>
-            successResponseCodes.contains(responseEntry.key) ||
-            successDescriptions.contains(responseEntry.value.description))
-        ?.value;
+        .where((responseEntry) {
+          final code = int.tryParse(responseEntry.key) ?? 0;
+
+          return code ~/ 100 == 2 ||
+              successDescriptions.contains(responseEntry.value.description);
+        })
+        .map((e) => e.value)
+        .toList();
   }
 
   String _getResponseModelName({
@@ -1349,13 +1361,19 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
       return overridenResponses[path]!.overriddenValue;
     }
 
-    final neededResponse = getSuccessedResponse(
+    final neededResponses = getSuccessedResponses(
       responses: responses,
     );
 
-    if (neededResponse == null) {
+    if (neededResponses.isEmpty) {
       return '';
     }
+
+    if (neededResponses.length > 1 && !options.generateFirstSucceedResponse) {
+      return '';
+    }
+
+    final neededResponse = neededResponses.first;
 
     if (neededResponse.schema?.type == kObject &&
         neededResponse.schema?.properties.isNotEmpty == true) {
