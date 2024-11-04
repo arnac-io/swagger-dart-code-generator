@@ -1,6 +1,7 @@
 // ignore_for_file: type=lint
 
 import 'package:json_annotation/json_annotation.dart';
+import 'package:json_annotation/json_annotation.dart' as json;
 import 'package:collection/collection.dart';
 import 'dart:convert';
 
@@ -31,7 +32,7 @@ abstract class PetServiceJson extends ChopperService {
     ErrorConverter? errorConverter,
     Converter? converter,
     Uri? baseUrl,
-    Iterable<dynamic>? interceptors,
+    List<Interceptor>? interceptors,
   }) {
     if (client != null) {
       return _$PetServiceJson(client);
@@ -109,6 +110,7 @@ abstract class PetServiceJson extends ChopperService {
 
   ///Finds Pets by tags
   ///@param tags Tags to filter by
+  @deprecated
   Future<chopper.Response<List<Pet>>> petFindByTagsGet({
     required List<String>? tags,
     dynamic cacheControl,
@@ -121,6 +123,7 @@ abstract class PetServiceJson extends ChopperService {
 
   ///Finds Pets by tags
   ///@param tags Tags to filter by
+  @deprecated
   @Get(path: '/pet/findByTags')
   Future<chopper.Response<List<Pet>>> _petFindByTagsGet({
     @Query('tags') required List<String>? tags,
@@ -487,7 +490,7 @@ class Category {
   static const fromJsonFactory = _$CategoryFromJson;
 
   @override
-  bool operator ==(dynamic other) {
+  bool operator ==(Object other) {
     return identical(this, other) ||
         (other is Category &&
             (identical(other.id, id) ||
@@ -555,7 +558,7 @@ class User {
   static const fromJsonFactory = _$UserFromJson;
 
   @override
-  bool operator ==(dynamic other) {
+  bool operator ==(Object other) {
     return identical(this, other) ||
         (other is User &&
             (identical(other.id, id) ||
@@ -658,7 +661,7 @@ class Tag {
   static const fromJsonFactory = _$TagFromJson;
 
   @override
-  bool operator ==(dynamic other) {
+  bool operator ==(Object other) {
     return identical(this, other) ||
         (other is Tag &&
             (identical(other.id, id) ||
@@ -712,7 +715,7 @@ class ApiResponse {
   static const fromJsonFactory = _$ApiResponseFromJson;
 
   @override
-  bool operator ==(dynamic other) {
+  bool operator ==(Object other) {
     return identical(this, other) ||
         (other is ApiResponse &&
             (identical(other.code, code) ||
@@ -779,8 +782,9 @@ enums.OrderStatus? orderStatusNullableFromJson(
   if (orderStatus == null) {
     return null;
   }
-  return enums.OrderStatus.values
-          .firstWhereOrNull((e) => e.value == orderStatus) ??
+  return enums.OrderStatus.values.firstWhereOrNull((e) =>
+          e.value.toString().toLowerCase() ==
+          orderStatus.toString().toLowerCase()) ??
       defaultValue;
 }
 
@@ -844,7 +848,9 @@ enums.PetStatus? petStatusNullableFromJson(
   if (petStatus == null) {
     return null;
   }
-  return enums.PetStatus.values.firstWhereOrNull((e) => e.value == petStatus) ??
+  return enums.PetStatus.values.firstWhereOrNull((e) =>
+          e.value.toString().toLowerCase() ==
+          petStatus.toString().toLowerCase()) ??
       defaultValue;
 }
 
@@ -910,8 +916,9 @@ enums.PetFindByStatusGetStatus? petFindByStatusGetStatusNullableFromJson(
   if (petFindByStatusGetStatus == null) {
     return null;
   }
-  return enums.PetFindByStatusGetStatus.values
-          .firstWhereOrNull((e) => e.value == petFindByStatusGetStatus) ??
+  return enums.PetFindByStatusGetStatus.values.firstWhereOrNull((e) =>
+          e.value.toString().toLowerCase() ==
+          petFindByStatusGetStatus.toString().toLowerCase()) ??
       defaultValue;
 }
 

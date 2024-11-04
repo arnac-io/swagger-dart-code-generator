@@ -21,6 +21,14 @@ void main() {
     ),
   );
 
+  final generator3 = SwaggerModelsGeneratorV2(
+    GeneratorOptions(
+      inputFolder: '',
+      outputFolder: '',
+      overrideEqualsAndHashcode: false,
+    ),
+  );
+
   group('generateDefaultValueFromMap', () {
     test('Should return default value', () {
       const defaultValue = 'true';
@@ -119,6 +127,29 @@ void main() {
 
       expect(result, contains(expectedResult));
     });
+
+    test('Should return Uuid', () {
+      final generator = SwaggerModelsGeneratorV2(
+        GeneratorOptions(
+          inputFolder: '',
+          outputFolder: '',
+          importPaths: [
+            'package:uuid/uuid.dart',
+          ],
+          scalars: {
+            'uuid': CustomScalar(type: 'Uuid', deserialize: 'parse')
+          }
+        ),
+      );
+      const className = 'Person';
+      const parameterName = 'id';
+      final parameter = SwaggerSchema(type: 'string', format: 'uuid');
+      const expectedResult = 'Uuid';
+      final result = generator.getParameterTypeName(
+          className, parameterName, parameter, '', null);
+
+      expect(result, contains(expectedResult));
+    });
   });
 
   group('generateFieldName', () {
@@ -163,6 +194,7 @@ void main() {
       final result = generator.generatePropertyContentByDefault(
         prop: propertyEntryMap,
         propertyName: propertyName,
+        propertyKey: propertyName,
         allEnumNames: [],
         allEnumListNames: [],
         requiredProperties: [],
@@ -182,6 +214,7 @@ void main() {
       )).generatePropertyContentByDefault(
         prop: propertyEntryMap,
         propertyName: propertyName,
+        propertyKey: propertyName,
         allEnumNames: [],
         allEnumListNames: [],
         requiredProperties: [],
@@ -197,6 +230,7 @@ void main() {
       final result = generator.generatePropertyContentByDefault(
         prop: propertyEntryMap,
         propertyName: propertyName,
+        propertyKey: propertyName,
         allEnumNames: [],
         allEnumListNames: [],
         requiredProperties: [],
@@ -369,7 +403,7 @@ void main() {
       };
 
       const className = 'Animals';
-      const jsonKeyExpectedResult = "\t@JsonKey(name: 'animals')\n";
+      const jsonKeyExpectedResult = "\t@JsonKey(name: 'Animals')\n";
       const fieldExpectedResult = 'final Pet animals';
       final result = generator.generatePropertiesContent(
         SwaggerRoot.empty,
@@ -394,7 +428,7 @@ void main() {
       };
 
       const className = 'Animals';
-      const jsonKeyExpectedResult = "\t@JsonKey(name: '\\\$with')\n";
+      const jsonKeyExpectedResult = "\t@JsonKey(name: 'with')\n";
       const fieldExpectedResult = 'final Pet \$with';
       final result = generator.generatePropertiesContent(
         SwaggerRoot.empty,
@@ -514,6 +548,65 @@ void main() {
     });
   });
 
+  group('generateEqualsOverride', () {
+    test(
+        "Should not return generated equals due to overrideEqualsAndHashcode set to false",
+        () {
+      const className = 'Animals';
+      final result = generator3.generateEqualsOverride(
+        "final String foo;",
+        className,
+        generator3.options,
+      );
+
+      expect(result, isEmpty);
+    });
+
+    test("Should not return generated equals due to empty properties", () {
+      const className = 'Animals';
+      final result = generator3.generateEqualsOverride(
+        "",
+        className,
+        generator3.options,
+      );
+
+      expect(result, isEmpty);
+    });
+
+    test("Should not return generated equals due to non-formatted properties",
+        () {
+      const className = 'Animals';
+      final result = generator3.generateEqualsOverride(
+        "not_a_property",
+        className,
+        generator3.options,
+      );
+
+      expect(result, isEmpty);
+    });
+
+    test("Should return generated equals", () {
+      const className = 'Animals';
+      final expected = '''
+@override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other is Animals &&
+            (identical(other.foo, foo) ||
+                const DeepCollectionEquality().equals(other.foo, foo))
+    );
+  }
+    ''';
+      final result = generator.generateEqualsOverride(
+        "final String foo;",
+        className,
+        generator.options,
+      );
+
+      expect(result, expected);
+    });
+  });
+
   group('Tests for getValidatedClassName', () {
     test('Should', () {
       final result = generator.getValidatedClassName('Request');
@@ -551,6 +644,7 @@ void main() {
   group('Tests for additionalProperties', () {
     test('Should generate dynamic map type', () {
       final map = SwaggerRoot.parse(objectWithadditionalProperties);
+
       final result = generator.generate(
         root: map,
         fileName: 'fileName',
@@ -558,6 +652,64 @@ void main() {
       );
 
       expect(result, contains('final Map<String,dynamic>? metadata'));
+    });
+  });
+
+  group('Tests for overridden format types', () {
+    test('Should include deserialize function in JsonKey annotation', () {
+      final map = SwaggerRoot.parse(schemasWithUuidsInProperties);
+      final generator = SwaggerModelsGeneratorV3(
+        GeneratorOptions(
+          inputFolder: '',
+          outputFolder: '',
+          scalars: {
+            'uuid': CustomScalar(
+              type: 'Uuid',
+              deserialize: 'Uuid.parse',
+            ),
+          },
+        ),
+      );
+
+      final result = generator.generate(
+        root: map,
+        fileName: 'fileName',
+        allEnums: [],
+      );
+
+      expect(result, contains(RegExp(r'''@_\$UuidJsonConverter\(\)\s*@JsonKey\(name: 'id'\)\s*final Uuid\? id;''')));
+      expect(result, contains(RegExp(r'''@_\$UuidJsonConverter\(\)\s*@JsonKey\(name: 'list', defaultValue: <Uuid>\[\]\)\s*final List<Uuid>\? list;''')));
+      expect(result, contains('class _\$UuidJsonConverter implements json.JsonConverter<Uuid, String>'));
+      expect(result, contains('fromJson(json) => Uuid.parse(json);'));
+      expect(result, contains('toJson(json) => json.toString();'));
+    });
+
+    test('Should include serialize/deserialize functions in JsonKey annotation', () {
+      final map = SwaggerRoot.parse(schemasWithUuidsInProperties);
+      final generator = SwaggerModelsGeneratorV3(
+        GeneratorOptions(
+          inputFolder: '',
+          outputFolder: '',
+          scalars: {
+            'uuid': CustomScalar(
+              type: 'Uuid',
+              deserialize: 'customUuidParse',
+              serialize: 'customUuidToString',
+            ),
+          },
+        ),
+      );
+
+      final result = generator.generate(
+        root: map,
+        fileName: 'fileName',
+        allEnums: [],
+      );
+
+      expect(result, contains(RegExp(r'''@_\$UuidJsonConverter\(\)\s*@JsonKey\(name: 'id'\)\s*final Uuid\? id;''')));
+      expect(result, contains('class _\$UuidJsonConverter implements json.JsonConverter<Uuid, String>'));
+      expect(result, contains('fromJson(json) => customUuidParse(json);'));
+      expect(result, contains('toJson(json) => customUuidToString(json);'));
     });
   });
 }

@@ -1,3 +1,31 @@
+# 3.0.1
+
+* Different fixes and improvements
+
+# 3.0.0
+* ***Breaking*** Added support of Chopper 8.0
+
+* Fixed generation of keywords in JsonKeys ([#734](https://github.com/epam-cross-platform-lab/swagger-dart-code-generator/issues/734))
+
+# 2.15.2
+
+* Fixed generation of some complex `allOf` chains
+
+# 2.15.1
+
+* Fixed some issues
+
+# 2.15.0
+
+* Changed option `enums_case_sensitive` to correctly default to `true` as stated in documentation
+* Fixed option `enums_case_sensitive` to work with nullable deserializers when set to `false`
+* Modernized `example/`
+* Bump `package:json_annotation` to `^4.8.1`
+
+# 2.14.2
+
+* Added option `generate_first_succeed_response` to generate first succeed response or `dynamic` ([#703](https://github.com/epam-cross-platform-lab/swagger-dart-code-generator/issues/703))
+
 # 2.14.1
 
 * ***Breaking*** Added ability to rename downloaded swagger files ([#558](https://github.com/epam-cross-platform-lab/swagger-dart-code-generator/issues/558))
