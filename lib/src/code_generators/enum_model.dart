@@ -149,7 +149,7 @@ enums.$name? ${name.camelCase}NullableFromJson(
 String ${name.camelCase}ExplodedListToJson(
     List<enums.$name>? ${name.camelCase}) {
 
-    return ${name.camelCase}?.map((e) => e.value!).join(',') ?? '';
+    return ${name.camelCase}?.map((e) => e.value == null ? 'unknown' : e.value!).join(',') ?? '';
 }
 
 
