@@ -162,7 +162,7 @@ List<$type> ${name.camelCase}ListToJson(
   }
 
   return ${name.camelCase}
-      .map((e) => e.value!)
+      .map((e) => e.value == null ? 'unknown' : e.value!)
       .toList();
 }
 
