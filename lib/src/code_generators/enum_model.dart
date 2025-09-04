@@ -169,7 +169,7 @@ List<$type> ${name.camelCase}ListToJson(
     return [];
   }
 
-  List<int> listValues = [];
+  List<$type> listValues = [];
     for (final e in ${name.camelCase}!) {
       if (e.value != null) {
         listValues.add(e.value!);
