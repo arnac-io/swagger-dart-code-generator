@@ -1098,7 +1098,9 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
 
     if (prop.hasAdditionalProperties && prop.type == 'object') {
       // Check if additionalProperties has a specific schema (not just true/false)
-      if (prop.additionalPropertiesSchema != null) {
+      // Exclude enum types from additionalPropertiesSchema
+      if (prop.additionalPropertiesSchema != null &&
+          !prop.additionalPropertiesSchema!.isEnum) {
         var valueTypeName = getParameterTypeName(
           className,
           propertyKey,
@@ -1106,11 +1108,12 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
           options.modelPostfix,
           null,
         );
-        // Check if the value type is an enum
-        if (allEnumNames.contains(valueTypeName)) {
-          valueTypeName = 'enums.$valueTypeName';
+        // Double-check that the resolved type name is not an enum
+        if (!allEnumNames.contains(valueTypeName)) {
+          typeName = 'Map<String, $valueTypeName>';
+        } else {
+          typeName = kMapStringDynamic;
         }
-        typeName = 'Map<String, $valueTypeName>';
       } else {
         typeName = kMapStringDynamic;
       }
