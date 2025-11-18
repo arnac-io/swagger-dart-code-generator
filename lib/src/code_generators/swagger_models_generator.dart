@@ -13,12 +13,11 @@ import 'package:swagger_dart_code_generator/src/swagger_models/swagger_root.dart
 
 abstract class SwaggerModelsGenerator extends SwaggerGeneratorBase {
   final GeneratorOptions _options;
-  final SwaggerReporter? reporter;
 
   @override
   GeneratorOptions get options => _options;
 
-  SwaggerModelsGenerator(this._options, [this.reporter]);
+  SwaggerModelsGenerator(this._options);
 
   String generate({
     required SwaggerRoot root,
@@ -276,9 +275,6 @@ abstract class SwaggerModelsGenerator extends SwaggerGeneratorBase {
     required bool generateEnumsMethods,
   }) {
     final converters = generateJsonConverters();
-    final reporterDeclaration = reporter != null 
-        ? 'import \'package:swagger_dart_code_generator/src/models/swagger_reporter.dart\';\nSwaggerReporter? _swaggerReporter;\n'
-        : '';
     final allEnumsString = generateEnumsMethods
         ? allEnums
             .map((e) => e.generateFromJsonToJson(options.enumsCaseSensitive))
@@ -295,7 +291,7 @@ abstract class SwaggerModelsGenerator extends SwaggerGeneratorBase {
     classes.addAll(classesFromInnerClasses);
 
     if (classes.isEmpty) {
-      return reporterDeclaration + allEnumsString;
+      return allEnumsString;
     }
 
     var results = classes.keys.map((String className) {
@@ -325,7 +321,7 @@ abstract class SwaggerModelsGenerator extends SwaggerGeneratorBase {
       results = results.replaceAll(' $listEnum ', ' List<$listEnum> ');
     }
 
-    return reporterDeclaration + converters + results + allEnumsString;
+    return converters + results + allEnumsString;
   }
 
   static String getValidatedParameterName(String parameterName) {
@@ -1551,12 +1547,12 @@ $copyWithMethod
 
   String generatedFromJson(SwaggerSchema schema, String validatedClassName) {
     final hasMapping = schema.discriminator?.mapping.isNotEmpty ?? false;
+    final reporterCode = '\t\tSwaggerReporterHelper.report(\'GenerateError in $validatedClassName\');\n';
     if (hasMapping) {
       final discriminator = schema.discriminator!;
       final propertyName = discriminator.propertyName;
       final responseVar = validatedClassName.camelCase;
 
-      final reporterCode = '\t\tif(_swaggerReporter != null) { _swaggerReporter!.report(\'GenerateError in $validatedClassName\'); }\n';
       return 'static $validatedClassName _\$${validatedClassName}FromJson(Map<String, dynamic> json) { '
           '\ttry { '
           'return $validatedClassName.fromJson(json);'
@@ -1576,7 +1572,6 @@ $copyWithMethod
           '\treturn $responseVar;'
           '}';
     }
-    final reporterCode = '\t\tif(_swaggerReporter != null) { _swaggerReporter!.report(\'GenerateError in $validatedClassName\'); }\n';
     return 'factory $validatedClassName.fromJson(Map<String, dynamic> json) { '
         '\ttry { '
         '\t\treturn _\$${validatedClassName}FromJson(json);'

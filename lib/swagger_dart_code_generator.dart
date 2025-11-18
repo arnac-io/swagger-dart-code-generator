@@ -14,8 +14,8 @@ import 'package:http/http.dart' as http;
 import 'package:yaml/yaml.dart';
 
 ///Returns instance of SwaggerDartCodeGenerator
-SwaggerDartCodeGenerator swaggerCodeBuilder(BuilderOptions options, {SwaggerReporter? reporter}) =>
-    SwaggerDartCodeGenerator(options, reporter: reporter);
+SwaggerDartCodeGenerator swaggerCodeBuilder(BuilderOptions options) =>
+    SwaggerDartCodeGenerator(options);
 
 const _inputFileExtensions = ['.swagger', '.json', '.yaml'];
 
@@ -110,7 +110,7 @@ Map<String, List<String>> _generateExtensions(GeneratorOptions options) {
 
 ///Root library entry
 class SwaggerDartCodeGenerator implements Builder {
-  SwaggerDartCodeGenerator(BuilderOptions builderOptions, {SwaggerReporter? reporter}) {
+  SwaggerDartCodeGenerator(BuilderOptions builderOptions) {
     final config = builderOptions.config;
     // Provide defaults for required fields if missing (e.g., when builder is used on package itself)
     final configWithDefaults = <String, dynamic>{
@@ -119,7 +119,6 @@ class SwaggerDartCodeGenerator implements Builder {
       ...config,
     };
     options = GeneratorOptions.fromJson(configWithDefaults);
-    _reporter = reporter;
   }
 
   @override
@@ -129,7 +128,6 @@ class SwaggerDartCodeGenerator implements Builder {
   Map<String, List<String>>? _buildExtensionsCopy;
 
   late GeneratorOptions options;
-  SwaggerReporter? _reporter;
 
   DartFormatter? _formatter;
 
@@ -206,8 +204,7 @@ class SwaggerDartCodeGenerator implements Builder {
       contents,
       fileWithoutExtension,
       options,
-      allEnums,
-      reporter: _reporter,
+      allEnums
     );
 
     final enums = codeGenerator.generateEnums(
@@ -231,8 +228,7 @@ class SwaggerDartCodeGenerator implements Builder {
       getClassNameFromFileName(fileNameWithExtension),
       removeFileExtension(fileNameWithExtension),
       options,
-      allEnums,
-      reporter: _reporter,
+      allEnums
     );
 
     final customDecoder = codeGenerator.generateCustomJsonConverter(

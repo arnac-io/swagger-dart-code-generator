@@ -7,7 +7,6 @@ import 'package:swagger_dart_code_generator/src/code_generators/swagger_models_g
 import 'package:swagger_dart_code_generator/src/extensions/parameter_extensions.dart';
 import 'package:swagger_dart_code_generator/src/extensions/string_extension.dart';
 import 'package:swagger_dart_code_generator/src/models/generator_options.dart';
-import 'package:swagger_dart_code_generator/src/models/swagger_reporter.dart';
 import 'package:swagger_dart_code_generator/src/swagger_models/requests/swagger_request.dart';
 import 'package:swagger_dart_code_generator/src/swagger_models/requests/swagger_request_parameter.dart';
 import 'package:swagger_dart_code_generator/src/swagger_models/responses/swagger_response.dart';
@@ -19,70 +18,26 @@ import 'constants.dart';
 
 class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
   final GeneratorOptions _options;
-  final SwaggerReporter? reporter;
 
   @override
   GeneratorOptions get options => _options;
 
   SwaggerRequestsGenerator(
-    this._options, [
-    this.reporter,
-  ]);
+    this._options);
 
   String generate({
     required SwaggerRoot swaggerRoot,
     required String className,
     required String fileName,
-    required List<EnumModel> allEnums,
-    SwaggerReporter? reporter,
+    required List<EnumModel> allEnums
   }) {
     final service = _generateService(
       swaggerRoot,
       allEnums,
       className,
-      fileName,
-      reporter ?? this.reporter,
+      fileName
     );
-
     final generatedCode = service.accept(DartEmitter()).toString();
-    
-    // Add static reporter field to the abstract class
-    // Find the opening brace of the abstract class and insert the field right after it
-    bool fieldInserted = false;
-    try {
-      // First try: find "abstract class ClassName" and then find the next opening brace
-      final classDeclarationIndex = generatedCode.indexOf('abstract class $className');
-      if (classDeclarationIndex != -1) {
-        // Find the first opening brace after the class declaration
-        final braceIndex = generatedCode.indexOf('{', classDeclarationIndex);
-        if (braceIndex != -1) {
-          fieldInserted = true;
-          return '${generatedCode.substring(0, braceIndex + 1)}\n  static SwaggerReporter? _swaggerReporter;${generatedCode.substring(braceIndex + 1)}';
-        }
-      }
-      
-      // Fallback: use regex pattern
-      final escapedClassName = RegExp.escape(className);
-      final classPattern = RegExp(
-        'abstract class $escapedClassName[\\s\\S]*?\\{',
-        dotAll: true,
-      );
-      
-      final match = classPattern.firstMatch(generatedCode);
-      if (match != null) {
-        final insertPosition = match.end;
-        fieldInserted = true;
-        return '${generatedCode.substring(0, insertPosition)}\n  static SwaggerReporter? _swaggerReporter;${generatedCode.substring(insertPosition)}';
-      }
-    } catch (e) {
-      // If anything goes wrong, continue without the field
-    }
-    
-    // If field insertion failed, remove the reporter assignment to avoid compilation errors
-    if (!fieldInserted) {
-      return generatedCode.replaceAll('    _swaggerReporter = reporter;\n', '');
-    }
-    
     return generatedCode;
   }
 
@@ -90,8 +45,7 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
     SwaggerRoot swaggerRoot,
     List<EnumModel> allEnums,
     String className,
-    String fileName,
-    SwaggerReporter? reporter,
+    String fileName
   ) {
     final allMethodsContent = _getAllMethodsContent(
       swaggerRoot: swaggerRoot,
@@ -101,8 +55,7 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
     final chopperClient = getChopperClientContent(
       className,
       swaggerRoot.host,
-      swaggerRoot.basePath,
-      reporter,
+      swaggerRoot.basePath
     );
 
     return Class(
@@ -1460,7 +1413,6 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
     String className,
     String host,
     String basePath,
-    SwaggerReporter? reporter,
   ) {
     final baseUrlString = options.withBaseUrl
         ? "baseUrl:  baseUrl ?? Uri.parse('http://$host$basePath')"
@@ -1470,7 +1422,7 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
         ? 'converter: converter ?? \$JsonSerializableConverter(),'
         : 'converter: converter ?? chopper.JsonConverter(),';
 
-    final reporterAssignment = '    _swaggerReporter = reporter;\n';
+    final reporterAssignment = '    SwaggerReporterHelper.setReporter(reporter);\n';
 
     final chopperClientBody = '''
     $reporterAssignment
