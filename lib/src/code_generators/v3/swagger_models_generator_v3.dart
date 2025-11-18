@@ -6,7 +6,7 @@ import 'package:swagger_dart_code_generator/src/swagger_models/responses/swagger
 import 'package:swagger_dart_code_generator/src/swagger_models/swagger_root.dart';
 
 class SwaggerModelsGeneratorV3 extends SwaggerModelsGenerator {
-  SwaggerModelsGeneratorV3(super.options);
+  SwaggerModelsGeneratorV3(super.options, [super.reporter]);
 
   @override
   String generate({
@@ -19,7 +19,7 @@ class SwaggerModelsGeneratorV3 extends SwaggerModelsGenerator {
     final responses = components?.responses ?? {};
 
     requestBodies.addAll(
-        SwaggerModelsGeneratorV2(options).getRequestBodiesFromRequests(root));
+        SwaggerModelsGeneratorV2(options, reporter).getRequestBodiesFromRequests(root));
 
     final formattedRequestBodies = <String, SwaggerSchema>{};
     requestBodies.forEach((key, value) {

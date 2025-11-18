@@ -8,6 +8,7 @@ import 'package:swagger_dart_code_generator/src/code_generators/v2/swagger_model
 import 'package:swagger_dart_code_generator/src/code_generators/v3/swagger_enums_generator_v3.dart';
 import 'package:swagger_dart_code_generator/src/code_generators/v3/swagger_models_generator_v3.dart';
 import 'package:swagger_dart_code_generator/src/models/generator_options.dart';
+import 'package:swagger_dart_code_generator/src/models/swagger_reporter.dart';
 import 'package:swagger_dart_code_generator/src/swagger_models/swagger_root.dart';
 
 class SwaggerCodeGenerator {
@@ -18,10 +19,10 @@ class SwaggerCodeGenerator {
     };
   }
 
-  Map<int, SwaggerModelsGenerator> _getModelsMap(GeneratorOptions options) {
+  Map<int, SwaggerModelsGenerator> _getModelsMap(GeneratorOptions options, SwaggerReporter? reporter) {
     return <int, SwaggerModelsGenerator>{
-      2: SwaggerModelsGeneratorV2(options),
-      3: SwaggerModelsGeneratorV3(options)
+      2: SwaggerModelsGeneratorV2(options, reporter),
+      3: SwaggerModelsGeneratorV3(options, reporter)
     };
   }
 
@@ -76,9 +77,10 @@ class SwaggerCodeGenerator {
     SwaggerRoot root,
     String fileName,
     GeneratorOptions options,
-    List<EnumModel> allEnums,
-  ) =>
-      _getSwaggerModelsGenerator(root, options).generate(
+    List<EnumModel> allEnums, {
+    SwaggerReporter? reporter,
+  }) =>
+      _getSwaggerModelsGenerator(root, options, reporter).generate(
         root: root,
         fileName: fileName,
         allEnums: allEnums,
@@ -89,13 +91,15 @@ class SwaggerCodeGenerator {
     String className,
     String fileName,
     GeneratorOptions options,
-    List<EnumModel> allEnums,
-  ) =>
-      _getSwaggerRequestsGenerator(root, options).generate(
+    List<EnumModel> allEnums, {
+    SwaggerReporter? reporter,
+  }) =>
+      _getSwaggerRequestsGenerator(root, options, reporter).generate(
         swaggerRoot: root,
         className: className,
         fileName: fileName,
         allEnums: allEnums,
+        reporter: reporter,
       );
 
   String generateCustomJsonConverter(
@@ -119,12 +123,14 @@ class SwaggerCodeGenerator {
   SwaggerModelsGenerator _getSwaggerModelsGenerator(
     SwaggerRoot root,
     GeneratorOptions options,
+    SwaggerReporter? reporter,
   ) =>
-      _getModelsMap(options)[_getApiVersion(root)]!;
+      _getModelsMap(options, reporter)[_getApiVersion(root)]!;
 
   SwaggerRequestsGenerator _getSwaggerRequestsGenerator(
     SwaggerRoot root,
     GeneratorOptions options,
+    SwaggerReporter? reporter,
   ) =>
-      SwaggerRequestsGenerator(options);
+      SwaggerRequestsGenerator(options, reporter);
 }

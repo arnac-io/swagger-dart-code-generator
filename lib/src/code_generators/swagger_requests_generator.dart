@@ -7,6 +7,7 @@ import 'package:swagger_dart_code_generator/src/code_generators/swagger_models_g
 import 'package:swagger_dart_code_generator/src/extensions/parameter_extensions.dart';
 import 'package:swagger_dart_code_generator/src/extensions/string_extension.dart';
 import 'package:swagger_dart_code_generator/src/models/generator_options.dart';
+import 'package:swagger_dart_code_generator/src/models/swagger_reporter.dart';
 import 'package:swagger_dart_code_generator/src/swagger_models/requests/swagger_request.dart';
 import 'package:swagger_dart_code_generator/src/swagger_models/requests/swagger_request_parameter.dart';
 import 'package:swagger_dart_code_generator/src/swagger_models/responses/swagger_response.dart';
@@ -18,25 +19,29 @@ import 'constants.dart';
 
 class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
   final GeneratorOptions _options;
+  final SwaggerReporter? reporter;
 
   @override
   GeneratorOptions get options => _options;
 
   SwaggerRequestsGenerator(
-    this._options,
-  );
+    this._options, [
+    this.reporter,
+  ]);
 
   String generate({
     required SwaggerRoot swaggerRoot,
     required String className,
     required String fileName,
     required List<EnumModel> allEnums,
+    SwaggerReporter? reporter,
   }) {
     final service = _generateService(
       swaggerRoot,
       allEnums,
       className,
       fileName,
+      reporter ?? this.reporter,
     );
 
     return service.accept(DartEmitter()).toString();
@@ -47,6 +52,7 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
     List<EnumModel> allEnums,
     String className,
     String fileName,
+    SwaggerReporter? reporter,
   ) {
     final allMethodsContent = _getAllMethodsContent(
       swaggerRoot: swaggerRoot,

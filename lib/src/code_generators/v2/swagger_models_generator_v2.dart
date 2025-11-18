@@ -5,7 +5,7 @@ import 'package:swagger_dart_code_generator/src/swagger_models/responses/swagger
 import 'package:swagger_dart_code_generator/src/swagger_models/swagger_root.dart';
 
 class SwaggerModelsGeneratorV2 extends SwaggerModelsGenerator {
-  SwaggerModelsGeneratorV2(super.options);
+  SwaggerModelsGeneratorV2(super.options, [super.reporter]);
 
   @override
   String generate({

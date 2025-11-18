@@ -7,16 +7,18 @@ import 'package:swagger_dart_code_generator/src/code_generators/swagger_requests
 import 'package:swagger_dart_code_generator/src/exception_words.dart';
 import 'package:swagger_dart_code_generator/src/extensions/string_extension.dart';
 import 'package:swagger_dart_code_generator/src/models/generator_options.dart';
+import 'package:swagger_dart_code_generator/src/models/swagger_reporter.dart';
 import 'package:swagger_dart_code_generator/src/swagger_models/responses/swagger_schema.dart';
 import 'package:swagger_dart_code_generator/src/swagger_models/swagger_root.dart';
 
 abstract class SwaggerModelsGenerator extends SwaggerGeneratorBase {
   final GeneratorOptions _options;
+  final SwaggerReporter? reporter;
 
   @override
   GeneratorOptions get options => _options;
 
-  SwaggerModelsGenerator(this._options);
+  SwaggerModelsGenerator(this._options, [this.reporter]);
 
   String generate({
     required SwaggerRoot root,
@@ -274,6 +276,9 @@ abstract class SwaggerModelsGenerator extends SwaggerGeneratorBase {
     required bool generateEnumsMethods,
   }) {
     final converters = generateJsonConverters();
+    final reporterDeclaration = reporter != null 
+        ? 'import \'package:swagger_dart_code_generator/src/models/swagger_reporter.dart\';\nSwaggerReporter? _swaggerReporter;\n'
+        : '';
     final allEnumsString = generateEnumsMethods
         ? allEnums
             .map((e) => e.generateFromJsonToJson(options.enumsCaseSensitive))
@@ -290,7 +295,7 @@ abstract class SwaggerModelsGenerator extends SwaggerGeneratorBase {
     classes.addAll(classesFromInnerClasses);
 
     if (classes.isEmpty) {
-      return allEnumsString;
+      return reporterDeclaration + allEnumsString;
     }
 
     var results = classes.keys.map((String className) {
@@ -320,7 +325,7 @@ abstract class SwaggerModelsGenerator extends SwaggerGeneratorBase {
       results = results.replaceAll(' $listEnum ', ' List<$listEnum> ');
     }
 
-    return converters + results + allEnumsString;
+    return reporterDeclaration + converters + results + allEnumsString;
   }
 
   static String getValidatedParameterName(String parameterName) {
@@ -1551,11 +1556,15 @@ $copyWithMethod
       final propertyName = discriminator.propertyName;
       final responseVar = validatedClassName.camelCase;
 
+      final reporterCode = reporter != null 
+          ? '\t\tif(_swaggerReporter != null) { _swaggerReporter!.report(\'GenerateError in $validatedClassName\'); }\n'
+          : '';
       return 'static $validatedClassName _\$${validatedClassName}FromJson(Map<String, dynamic> json) { '
           '\ttry { '
           'return $validatedClassName.fromJson(json);'
           '} catch(_) {'
-          '\t\tFLog.info(text:\'GenerateError in $validatedClassName\');'
+          '$reporterCode'
+          '\t\tFLog.error(text:\'GenerateError in $validatedClassName\');'
           '\t\trethrow;'
           '}'
           '}\n\n'
@@ -1569,11 +1578,15 @@ $copyWithMethod
           '\treturn $responseVar;'
           '}';
     }
+    final reporterCode = reporter != null 
+        ? '\t\tif(_swaggerReporter != null) { _swaggerReporter!.report(\'GenerateError in $validatedClassName\'); }\n'
+        : '';
     return 'factory $validatedClassName.fromJson(Map<String, dynamic> json) { '
         '\ttry { '
         '\t\treturn _\$${validatedClassName}FromJson(json);'
         '\t} catch(_) { '
-        '\t\tFLog.info(text: \'GenerateError in $validatedClassName\');'
+        '$reporterCode'
+        '\t\tFLog.error(text: \'GenerateError in $validatedClassName\');'
         '\t\trethrow;'
         '\t} '
         '}';
