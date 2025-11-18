@@ -1556,9 +1556,7 @@ $copyWithMethod
       final propertyName = discriminator.propertyName;
       final responseVar = validatedClassName.camelCase;
 
-      final reporterCode = reporter != null 
-          ? '\t\tif(_swaggerReporter != null) { _swaggerReporter!.report(\'GenerateError in $validatedClassName\'); }\n'
-          : '';
+      final reporterCode = '\t\tif(_swaggerReporter != null) { _swaggerReporter!.report(\'GenerateError in $validatedClassName\'); }\n';
       return 'static $validatedClassName _\$${validatedClassName}FromJson(Map<String, dynamic> json) { '
           '\ttry { '
           'return $validatedClassName.fromJson(json);'
@@ -1578,9 +1576,7 @@ $copyWithMethod
           '\treturn $responseVar;'
           '}';
     }
-    final reporterCode = reporter != null 
-        ? '\t\tif(_swaggerReporter != null) { _swaggerReporter!.report(\'GenerateError in $validatedClassName\'); }\n'
-        : '';
+    final reporterCode = '\t\tif(_swaggerReporter != null) { _swaggerReporter!.report(\'GenerateError in $validatedClassName\'); }\n';
     return 'factory $validatedClassName.fromJson(Map<String, dynamic> json) { '
         '\ttry { '
         '\t\treturn _\$${validatedClassName}FromJson(json);'
