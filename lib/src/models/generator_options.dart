@@ -47,7 +47,11 @@ class GeneratorOptions {
       _$GeneratorOptionsFromJson(json);
 
   final bool usePathForRequestNames;
+
+  @JsonKey(defaultValue: true)
   final bool generateFirstSucceedResponse;
+
+  @JsonKey(defaultValue: true)
   final bool withBaseUrl;
   final bool addBasePathToRequests;
   final int? pageWidth;
