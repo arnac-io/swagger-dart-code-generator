@@ -127,6 +127,12 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
             ..type = Reference('List<Interceptor>?')
             ..name = 'interceptors',
         ))
+        ..optionalParameters.add(Parameter(
+          (p) => p
+            ..named = true
+            ..type = Reference('SwaggerReporter?')
+            ..name = 'reporter',
+        ))
         ..body = Code(body),
     );
   }
