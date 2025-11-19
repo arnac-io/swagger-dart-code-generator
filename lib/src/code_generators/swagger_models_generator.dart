@@ -7,6 +7,7 @@ import 'package:swagger_dart_code_generator/src/code_generators/swagger_requests
 import 'package:swagger_dart_code_generator/src/exception_words.dart';
 import 'package:swagger_dart_code_generator/src/extensions/string_extension.dart';
 import 'package:swagger_dart_code_generator/src/models/generator_options.dart';
+import 'package:swagger_dart_code_generator/src/models/swagger_reporter.dart';
 import 'package:swagger_dart_code_generator/src/swagger_models/responses/swagger_schema.dart';
 import 'package:swagger_dart_code_generator/src/swagger_models/swagger_root.dart';
 
@@ -1546,6 +1547,7 @@ $copyWithMethod
 
   String generatedFromJson(SwaggerSchema schema, String validatedClassName) {
     final hasMapping = schema.discriminator?.mapping.isNotEmpty ?? false;
+    final reporterCode = '\t\tSwaggerReporterHelper.report(\'GenerateError in $validatedClassName \${_.toString()}\');\n';
     if (hasMapping) {
       final discriminator = schema.discriminator!;
       final propertyName = discriminator.propertyName;
@@ -1555,7 +1557,8 @@ $copyWithMethod
           '\ttry { '
           'return $validatedClassName.fromJson(json);'
           '} catch(_) {'
-          '\t\tFLog.info(text:\'GenerateError in $validatedClassName\');'
+          '$reporterCode'
+          '\t\tFLog.error(text:\'GenerateError in $validatedClassName\');'
           '\t\trethrow;'
           '}'
           '}\n\n'
@@ -1573,7 +1576,8 @@ $copyWithMethod
         '\ttry { '
         '\t\treturn _\$${validatedClassName}FromJson(json);'
         '\t} catch(_) { '
-        '\t\tFLog.info(text: \'GenerateError in $validatedClassName\');'
+        '$reporterCode'
+        '\t\tFLog.error(text: \'GenerateError in $validatedClassName\');'
         '\t\trethrow;'
         '\t} '
         '}';

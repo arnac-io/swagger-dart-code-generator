@@ -76,8 +76,7 @@ class SwaggerCodeGenerator {
     SwaggerRoot root,
     String fileName,
     GeneratorOptions options,
-    List<EnumModel> allEnums,
-  ) =>
+    List<EnumModel> allEnums) =>
       _getSwaggerModelsGenerator(root, options).generate(
         root: root,
         fileName: fileName,
@@ -89,8 +88,7 @@ class SwaggerCodeGenerator {
     String className,
     String fileName,
     GeneratorOptions options,
-    List<EnumModel> allEnums,
-  ) =>
+    List<EnumModel> allEnums) =>
       _getSwaggerRequestsGenerator(root, options).generate(
         swaggerRoot: root,
         className: className,
@@ -118,7 +116,7 @@ class SwaggerCodeGenerator {
 
   SwaggerModelsGenerator _getSwaggerModelsGenerator(
     SwaggerRoot root,
-    GeneratorOptions options,
+    GeneratorOptions options
   ) =>
       _getModelsMap(options)[_getApiVersion(root)]!;
 

@@ -4,6 +4,7 @@ import 'package:build/build.dart';
 import 'package:swagger_dart_code_generator/src/extensions/file_name_extensions.dart';
 import 'package:swagger_dart_code_generator/src/extensions/yaml_extensions.dart';
 import 'package:swagger_dart_code_generator/src/models/generator_options.dart';
+import 'package:swagger_dart_code_generator/src/models/swagger_reporter.dart';
 import 'package:swagger_dart_code_generator/src/swagger_code_generator.dart';
 import 'package:swagger_dart_code_generator/src/swagger_models/swagger_root.dart';
 import 'package:universal_io/io.dart';
@@ -110,7 +111,14 @@ Map<String, List<String>> _generateExtensions(GeneratorOptions options) {
 ///Root library entry
 class SwaggerDartCodeGenerator implements Builder {
   SwaggerDartCodeGenerator(BuilderOptions builderOptions) {
-    options = GeneratorOptions.fromJson(builderOptions.config);
+    final config = builderOptions.config;
+    // Provide defaults for required fields if missing (e.g., when builder is used on package itself)
+    final configWithDefaults = <String, dynamic>{
+      'input_folder': config['input_folder'] ?? '',
+      'output_folder': config['output_folder'] ?? '',
+      ...config,
+    };
+    options = GeneratorOptions.fromJson(configWithDefaults);
   }
 
   @override
@@ -196,7 +204,7 @@ class SwaggerDartCodeGenerator implements Builder {
       contents,
       fileWithoutExtension,
       options,
-      allEnums,
+      allEnums
     );
 
     final enums = codeGenerator.generateEnums(
@@ -220,7 +228,7 @@ class SwaggerDartCodeGenerator implements Builder {
       getClassNameFromFileName(fileNameWithExtension),
       removeFileExtension(fileNameWithExtension),
       options,
-      allEnums,
+      allEnums
     );
 
     final customDecoder = codeGenerator.generateCustomJsonConverter(

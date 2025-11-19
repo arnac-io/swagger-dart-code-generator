@@ -23,30 +23,29 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
   GeneratorOptions get options => _options;
 
   SwaggerRequestsGenerator(
-    this._options,
-  );
+    this._options);
 
   String generate({
     required SwaggerRoot swaggerRoot,
     required String className,
     required String fileName,
-    required List<EnumModel> allEnums,
+    required List<EnumModel> allEnums
   }) {
     final service = _generateService(
       swaggerRoot,
       allEnums,
       className,
-      fileName,
+      fileName
     );
-
-    return service.accept(DartEmitter()).toString();
+    final generatedCode = service.accept(DartEmitter()).toString();
+    return generatedCode;
   }
 
   Class _generateService(
     SwaggerRoot swaggerRoot,
     List<EnumModel> allEnums,
     String className,
-    String fileName,
+    String fileName
   ) {
     final allMethodsContent = _getAllMethodsContent(
       swaggerRoot: swaggerRoot,
@@ -56,7 +55,7 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
     final chopperClient = getChopperClientContent(
       className,
       swaggerRoot.host,
-      swaggerRoot.basePath,
+      swaggerRoot.basePath
     );
 
     return Class(
@@ -120,6 +119,12 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
             ..named = true
             ..type = Reference('List<Interceptor>?')
             ..name = 'interceptors',
+        ))
+        ..optionalParameters.add(Parameter(
+          (p) => p
+            ..named = true
+            ..type = Reference('SwaggerReporter?')
+            ..name = 'reporter',
         ))
         ..body = Code(body),
     );
@@ -1417,7 +1422,10 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
         ? 'converter: converter ?? \$JsonSerializableConverter(),'
         : 'converter: converter ?? chopper.JsonConverter(),';
 
+    final reporterAssignment = '    SwaggerReporterHelper.setReporter(reporter);\n';
+
     final chopperClientBody = '''
+    $reporterAssignment
     if(client!=null){
       return _\$$className(client);
     }
