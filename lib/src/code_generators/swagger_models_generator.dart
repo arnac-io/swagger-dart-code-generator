@@ -1547,7 +1547,7 @@ $copyWithMethod
 
   String generatedFromJson(SwaggerSchema schema, String validatedClassName) {
     final hasMapping = schema.discriminator?.mapping.isNotEmpty ?? false;
-    final reporterCode = '\t\tSwaggerReporterHelper.report(\'GenerateError in $validatedClassName\');\n';
+    final reporterCode = '\t\tSwaggerReporterHelper.report(\'GenerateError in $validatedClassName \${_.toString()}\');\n';
     if (hasMapping) {
       final discriminator = schema.discriminator!;
       final propertyName = discriminator.propertyName;
