@@ -772,7 +772,7 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
             ));
 
     final safeStringParseFor =
-    options.additionalHeaders.map((e) => SwaggerRequestParameter(
+    options.safeStringParseFor.map((e) => SwaggerRequestParameter(
       inParameter: 'safe_string_parse_for',
       name: e,
       type: 'String',
