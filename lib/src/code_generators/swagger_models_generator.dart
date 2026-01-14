@@ -529,7 +529,7 @@ class $className implements json.JsonConverter<${value.type}, String> {
       typeName = typeName.makeNullable();
     }
 
-    if (options.ignoredKeys.contains(propertyKey) && includeIfNullString.contains('includeIfNull: false') == true) {
+    if (typeName == 'String?' && options.ignoredKeys.contains(propertyKey)) {
       return '';
     }
 
@@ -723,7 +723,9 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
             !requiredProperties.contains(propertyKey))) {
       typeName = typeName.makeNullable();
     }
-
+    if (typeName == 'String?' && options.ignoredKeys.contains(propertyKey)) {
+      return '';
+    }
     return '\t$jsonKeyContent$deprecatedContent\t$typeName ${generateFieldName(propertyName)};${unknownEnumValue.fromJson}';
   }
 
@@ -792,7 +794,9 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
         !requiredProperties.contains(propertyKey)) {
       typeName = typeName.makeNullable();
     }
-
+    if (typeName == 'String?' && options.ignoredKeys.contains(propertyKey)) {
+      return '';
+    }
     return '\t$jsonKeyContent$deprecatedContent\t$typeName $propertyName;${unknownEnumValue.fromJson}';
   }
 
@@ -1171,6 +1175,9 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
         options.nullableModels.contains(className) ||
         !requiredProperties.contains(propertyKey)) {
       typeName = typeName.makeNullable();
+    }
+    if (typeName == 'String?' && options.ignoredKeys.contains(propertyKey)) {
+      return '';
     }
 
     return '\t$jsonConverterAnnotation$jsonKeyContent$isDeprecatedContent $typeName $propertyName;${unknownEnumValue.fromJson}';
