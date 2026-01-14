@@ -1585,13 +1585,47 @@ $copyWithMethod
 
   String generateToJson(SwaggerSchema schema, String validatedClassName) {
     final hasMapping = schema.discriminator?.mapping.isNotEmpty ?? false;
+    final safeStringKeys = options.safeStringParseFor;
+    
     if (hasMapping) {
-      return 'static Map<String, dynamic> _\$${validatedClassName}ToJson($validatedClassName instance) { return Map<String, dynamic>();}\n\n'
-          'Map<String, dynamic> toJson() =>'
-          '_\$${validatedClassName}ToJson(this)'
-          '\t\t\t${schema.discriminator!.mapping.entries.map((entry) => '\n..addAll(${entry.key == 'dynamic' ? 'dynamicField' : entry.key.camelCase}?.toJson() ?? {})').join('\n')};';
+      final cascadeAddAlls = schema.discriminator!.mapping.entries.map((entry) => 
+          '\n..addAll(${entry.key == 'dynamic' ? 'dynamicField' : entry.key.camelCase}?.toJson() ?? {})').join('');
+      
+      if (safeStringKeys.isEmpty) {
+        return 'static Map<String, dynamic> _\$${validatedClassName}ToJson($validatedClassName instance) { return Map<String, dynamic>();}\n\n'
+            'Map<String, dynamic> toJson() =>'
+            '_\$${validatedClassName}ToJson(this)$cascadeAddAlls;';
+      } else {
+        final safeKeysList = safeStringKeys.map((k) => "'$k'").join(', ');
+        return 'static Map<String, dynamic> _\$${validatedClassName}ToJson($validatedClassName instance) { return Map<String, dynamic>();}\n\n'
+            'Map<String, dynamic> toJson() {'
+            '\t\tfinal json = _\$${validatedClassName}ToJson(this)$cascadeAddAlls;'
+            '\t\tfinal safeStringKeys = [$safeKeysList];'
+            '\t\treturn json.map((key, value) {'
+            '\t\t\tif (safeStringKeys.contains(key) && value is String && value.length > 100) {'
+            '\t\t\t\treturn MapEntry(key, value.substring(0, 100));'
+            '\t\t\t}'
+            '\t\t\treturn MapEntry(key, value);'
+            '\t\t});'
+            '\t}';
+      }
     }
-    return 'Map<String, dynamic> toJson() => _\$${validatedClassName}ToJson(this);';
+    
+    if (safeStringKeys.isEmpty) {
+      return 'Map<String, dynamic> toJson() => _\$${validatedClassName}ToJson(this);';
+    } else {
+      final safeKeysList = safeStringKeys.map((k) => "'$k'").join(', ');
+      return 'Map<String, dynamic> toJson() {'
+          '\t\tfinal json = _\$${validatedClassName}ToJson(this);'
+          '\t\tfinal safeStringKeys = [$safeKeysList];'
+          '\t\treturn json.map((key, value) {'
+          '\t\t\tif (safeStringKeys.contains(key) && value is String && value.length > 100) {'
+          '\t\t\t\treturn MapEntry(key, value.substring(0, 100));'
+          '\t\t\t}'
+          '\t\t\treturn MapEntry(key, value);'
+          '\t\t});'
+          '\t}';
+    }
   }
 
   String generateCreateToJson(SwaggerSchema schema, String validatedClassName) {

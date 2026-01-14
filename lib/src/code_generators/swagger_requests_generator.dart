@@ -771,11 +771,19 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
               type: 'String',
             ));
 
+    final safeStringParseFor =
+    options.additionalHeaders.map((e) => SwaggerRequestParameter(
+      inParameter: 'safe_string_parse_for',
+      name: e,
+      type: 'String',
+    ));
+
     final parameters = [
       ...swaggerRequest.parameters,
       ...swaggerPath.parameters,
       ...securityParameters,
       ...additionalHeaders,
+      ...safeStringParseFor,
     ].map((par) => definedParameters[par.ref.split('/').last] ?? par).toList();
 
     final result = parameters

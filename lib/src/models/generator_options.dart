@@ -31,6 +31,7 @@ class GeneratorOptions {
     this.nullableModels = const [],
     this.cutFromModelNames = '',
     this.additionalHeaders = const [],
+    this.safeStringParseFor = const [],
     this.overrideEqualsAndHashcode = true,
     this.overrideToString = true,
     this.pageWidth,
@@ -60,6 +61,7 @@ class GeneratorOptions {
   final List<OverridenModelsItem> overridenModels;
   final List<String> generateToJsonFor;
   final List<String> additionalHeaders;
+  final List<String> safeStringParseFor;
   final List<InputUrl> inputUrls;
   final List<String> nullableModels;
   final bool separateModels;
