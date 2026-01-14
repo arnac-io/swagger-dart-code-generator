@@ -886,6 +886,10 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
       typeName += '?';
     }
 
+    if (typeName == 'String?' && options.ignoredKeys.contains(propertyKey)) {
+      return '';
+    }
+
     return '\t$jsonKeyContent$deprecatedContent\t$typeName $propertyName;${unknownEnumValue.fromJson}';
   }
 
@@ -1079,7 +1083,9 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
         !requiredProperties.contains(propertyKey)) {
       listPropertyName = listPropertyName.makeNullable();
     }
-
+    if (typeName == 'String?' && options.ignoredKeys.contains(propertyKey)) {
+      return '';
+    }
     return '$jsonConverterAnnotation$jsonKeyContent$deprecatedContent $listPropertyName ${generateFieldName(propertyName)};${unknownEnumValue.fromJson}';
   }
 
