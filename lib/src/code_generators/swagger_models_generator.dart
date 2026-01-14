@@ -529,6 +529,10 @@ class $className implements json.JsonConverter<${value.type}, String> {
       typeName = typeName.makeNullable();
     }
 
+    if (options.ignoredKeys.contains(propertyKey) && includeIfNullString.contains('includeIfNull: false') == true) {
+      return '';
+    }
+
     final jsonKeyContent =
         "@JsonKey(name: '$propertyKey'$includeIfNullString$dateToJsonValue${unknownEnumValue.jsonKey})\n";
     final deprecatedContent = isDeprecated ? '@deprecated\n' : '';

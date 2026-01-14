@@ -72,6 +72,10 @@ GeneratorOptions _$GeneratorOptionsFromJson(Map json) => GeneratorOptions(
               ?.map((e) => e as String)
               .toList() ??
           const [],
+      ignoredKeys: (json['ignored_keys'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          const [],
       overrideEqualsAndHashcode:
           json['override_equals_and_hashcode'] as bool? ?? true,
       overrideToString: json['override_to_string'] as bool? ?? true,
@@ -113,6 +117,7 @@ Map<String, dynamic> _$GeneratorOptionsToJson(GeneratorOptions instance) =>
       'overriden_models': instance.overridenModels,
       'generate_to_json_for': instance.generateToJsonFor,
       'additional_headers': instance.additionalHeaders,
+      'ignored_keys': instance.ignoredKeys,
       'input_urls': instance.inputUrls,
       'nullable_models': instance.nullableModels,
       'separate_models': instance.separateModels,
