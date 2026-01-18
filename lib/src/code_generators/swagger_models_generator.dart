@@ -513,23 +513,27 @@ class $className implements json.JsonConverter<${value.type}, String> {
     final dateToJsonValue = generateToJsonForDate(prop);
 
     final includeIfNullString = generateIncludeIfNullString();
+    bool isNullableProperty = false;
 
     if (typeName != kDynamic &&
         (prop.shouldBeNullable || options.nullableModels.contains(typeName))) {
       typeName = typeName.makeNullable();
+      isNullableProperty = true;
     }
 
     if (requiredProperties.isNotEmpty &&
         !requiredProperties.contains(propertyKey)) {
       typeName = typeName.makeNullable();
+      isNullableProperty = true;
     }
 
     if (requiredProperties.isNotEmpty &&
         !requiredProperties.contains(propertyKey)) {
       typeName = typeName.makeNullable();
+      isNullableProperty = true;
     }
 
-    if (typeName == 'String?' && (options.ignoredKeys.contains(propertyKey) || propertyKey == 'metadata_uri')) {
+    if (isNullableProperty && options.ignoredKeys.contains(propertyKey)) {
       return '';
     }
 
@@ -717,13 +721,14 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
         "@JsonKey(name: '${_validatePropertyKey(propertyKey)}'$includeIfNullString${unknownEnumValue.jsonKey}$dateToJsonValue)\n";
     final deprecatedContent =
         propertySchema.deprecated ? kDeprecatedAnnotation : '';
-
+    bool isNullableProperty = false;
     if (prop.shouldBeNullable ||
         (options.nullableModels.contains(className) &&
             !requiredProperties.contains(propertyKey))) {
       typeName = typeName.makeNullable();
+      isNullableProperty = true;
     }
-    if (typeName == 'String?' && (options.ignoredKeys.contains(propertyKey) || propertyKey == 'metadata_uri')) {
+    if (isNullableProperty && options.ignoredKeys.contains(propertyKey)) {
       return '';
     }
     return '\t$jsonKeyContent$deprecatedContent\t$typeName ${generateFieldName(propertyName)};${unknownEnumValue.fromJson}';
@@ -788,13 +793,14 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
         "@JsonKey(name: '${_validatePropertyKey(propertyKey)}'$includeIfNullString${unknownEnumValue.jsonKey})\n";
 
     final deprecatedContent = prop.deprecated ? kDeprecatedAnnotation : '';
-
+    bool isNullableProperty = false;
     if (prop.shouldBeNullable ||
         options.nullableModels.contains(className) ||
         !requiredProperties.contains(propertyKey)) {
       typeName = typeName.makeNullable();
+      isNullableProperty = true;
     }
-    if (typeName == 'String?' && (options.ignoredKeys.contains(propertyKey) || propertyKey == 'metadata_uri')) {
+    if (isNullableProperty && options.ignoredKeys.contains(propertyKey)) {
       return '';
     }
     return '\t$jsonKeyContent$deprecatedContent\t$typeName $propertyName;${unknownEnumValue.fromJson}';
@@ -873,11 +879,12 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
     }
 
     final propertySchema = allClasses[prop.ref.getUnformattedRef()];
-
+    bool isNullableProperty = false;
     if (propertySchema?.shouldBeNullable == true ||
         isPropertyNullable ||
         options.nullableModels.contains(className)) {
       typeName = typeName.makeNullable();
+      isNullableProperty = true;
     }
 
     if (options.classesWithNullabeLists.contains(className) &&
@@ -886,7 +893,7 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
       typeName += '?';
     }
 
-    if (typeName == 'String?' && (options.ignoredKeys.contains(propertyKey) || propertyKey == 'metadata_uri')) {
+    if (isNullableProperty && options.ignoredKeys.contains(propertyKey)) {
       return '';
     }
 
@@ -1083,9 +1090,6 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
         !requiredProperties.contains(propertyKey)) {
       listPropertyName = listPropertyName.makeNullable();
     }
-    if (typeName == 'String?' && (options.ignoredKeys.contains(propertyKey) || propertyKey == 'metadata_uri')) {
-      return '';
-    }
     return '$jsonConverterAnnotation$jsonKeyContent$deprecatedContent $listPropertyName ${generateFieldName(propertyName)};${unknownEnumValue.fromJson}';
   }
 
@@ -1176,13 +1180,14 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
     } else {
       jsonKeyContent += ')\n';
     }
-
+    bool isNullableProperty = false;
     if (prop.shouldBeNullable ||
         options.nullableModels.contains(className) ||
         !requiredProperties.contains(propertyKey)) {
       typeName = typeName.makeNullable();
+      isNullableProperty = true;
     }
-    if (typeName == 'String?' && (options.ignoredKeys.contains(propertyKey) || propertyKey == 'metadata_uri')) {
+    if (isNullableProperty && options.ignoredKeys.contains(propertyKey)) {
       return '';
     }
 
@@ -1464,7 +1469,9 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
       if (isRequiredProperty || !isNullableProperty) {
         results += '\t\t$kRequired this.$fieldName,\n';
       } else {
-        results += '\t\tthis.$fieldName,\n';
+        if (!options.ignoredKeys.contains(fieldName)) {
+          results += '\t\tthis.$fieldName,\n';
+        }
       }
     });
 
