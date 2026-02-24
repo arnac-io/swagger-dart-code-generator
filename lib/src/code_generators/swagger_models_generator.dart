@@ -1571,7 +1571,7 @@ $copyWithMethod
 
   String generatedFromJson(SwaggerSchema schema, String validatedClassName) {
     final hasMapping = schema.discriminator?.mapping.isNotEmpty ?? false;
-    final reporterCode = '\t\tSwaggerReporterHelper.report(\'GenerateError in $validatedClassName \${_.toString()}\');\n';
+    final reporterCode = '\t\tSwaggerReporterHelper.report(\'GenerateError in $validatedClassName \${ex.toString()}\');\n';
     if (hasMapping) {
       final discriminator = schema.discriminator!;
       final propertyName = discriminator.propertyName;
@@ -1580,7 +1580,7 @@ $copyWithMethod
       return 'static $validatedClassName _\$${validatedClassName}FromJson(Map<String, dynamic> json) { '
           '\ttry { '
           'return $validatedClassName.fromJson(json);'
-          '} catch(_) {'
+          '} catch(ex) {'
           '$reporterCode'
           '\t\tFLog.error(text:\'GenerateError in $validatedClassName\');'
           '\t\trethrow;'
@@ -1591,7 +1591,7 @@ $copyWithMethod
           'factory $validatedClassName.fromJson(Map<String, dynamic> json) {'
           '\t\tvar $responseVar = $validatedClassName();'
           '\t\tswitch (json[\'$propertyName\']) {'
-          '\t\t\t${discriminator.mapping.entries.map((entry) => 'case \'${entry.key}\': try { $responseVar.${entry.key == 'dynamic' ? 'dynamicField' : entry.key.camelCase} = _\$${entry.value.split('/').last.pascalCase}FromJson(json); } catch(_) {} break;').join('\n')}'
+          '\t\t\t${discriminator.mapping.entries.map((entry) => 'case \'${entry.key}\': try { $responseVar.${entry.key == 'dynamic' ? 'dynamicField' : entry.key.camelCase} = _\$${entry.value.split('/').last.pascalCase}FromJson(json); } catch(ex) {$reporterCode} break;').join('\n')}'
           '\t\t}'
           '\treturn $responseVar;'
           '}';
@@ -1599,7 +1599,7 @@ $copyWithMethod
     return 'factory $validatedClassName.fromJson(Map<String, dynamic> json) { '
         '\ttry { '
         '\t\treturn _\$${validatedClassName}FromJson(json);'
-        '\t} catch(_) { '
+        '\t} catch(ex) { '
         '$reporterCode'
         '\t\tFLog.error(text: \'GenerateError in $validatedClassName\');'
         '\t\trethrow;'
