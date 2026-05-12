@@ -1,42 +1,42 @@
-# Plan: Common interface generation para `oneOf` + `discriminator`
+# Plan: Common interface generation for `oneOf` + `discriminator`
 
-> **Contexto**: hoy `swagger_dart_code_generator` ignora el `discriminator` de
-> los wrappers polimórficos OpenAPI 3 y emite un anti-patrón de N campos
-> nullable paralelos sin interfaz común. Esto fuerza al consumer a escribir
-> cadenas manuales `wrapper.evm?.x ?? wrapper.solana?.x ?? ...` para cada
-> propiedad común, y nos cuesta hoy ~785 líneas de `chain_adapter` en
-> arnac-mobile que reimplementan a mano lo que el generator debería hacer solo.
+> **Context**: today `swagger_dart_code_generator` ignores the `discriminator`
+> of OpenAPI 3 polymorphic wrappers and emits an anti-pattern of N parallel
+> nullable fields with no common interface. This forces consumers to write
+> manual chains like `wrapper.evm?.x ?? wrapper.solana?.x ?? ...` for every
+> common property, and costs us today ~785 lines of `chain_adapter` in
+> arnac-mobile that hand-implement what the generator should produce on its own.
 >
-> Este plan introduce **generación automática de un `sealed class IXxx`** por
-> wrapper, con sus subtipos haciendo `implements IXxx`, y un getter
-> `IXxx? get active` en el wrapper que apunta al subtipo activo.
+> This plan introduces **automatic generation of a `sealed class IXxx`** per
+> wrapper, with its subtypes doing `implements IXxx`, and a `IXxx? get active`
+> getter on the wrapper that points to the currently populated subtype.
 
 ---
 
-## Decisiones cerradas
+## Closed decisions
 
-| #   | Decisión                                                           | Valor                                                                                                |
-| --- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| 1   | Qué wrappers reciben tratamiento                                   | Todo schema con `discriminator.mapping`, ≥ 2 subtipos Y ≥ 1 prop común                               |
-| 2   | Transitive type unification                                        | Sí. Si una prop apunta a refs que TODOS son subtipos de otro wrapper W, el tipo del getter es `IW`.  |
-| 3   | Naming del interface                                               | `I<WrapperName>` (`IVault`, `IEnrichedChain`, ...)                                                   |
-| 4   | Naming del getter al subtipo activo                                | `active`                                                                                             |
-| 5   | Modificador de clase del interface                                 | `sealed class` (permite pattern matching exhaustivo + `_`/`default:` para forward-compat)            |
-| 6   | Lax intersection (props presentes en ≥ 80% de subtipos)            | Sí. Las que faltan: stub `@override T? get foo => null;` en el subtipo                               |
-| 7   | Exponer discriminator como string en el wrapper                    | **No**. Pattern matching ES el discriminador                                                         |
-| 8   | `_active` cacheado o computado                                     | **Cacheado** (field set en `fromJson`, no recomputado por acceso)                                    |
-| 9   | `_active` debe quedar fuera de `==`/`hashCode`/`copyWith`/`toJson` | Sí (la regex actual lo filtra por no ser `final`)                                                    |
-| 10  | Soporte para `separate_models: true`                               | Out of scope. Si alguien lo activa, degradar a `abstract interface class`. Follow-up.                |
-| 11  | Emitir `UnknownVault` placeholder para discriminator desconocido   | Out of scope. `vault.active` queda `null` si no matchea ningún case. Follow-up si aparece necesidad. |
+| #   | Decision                                                            | Value                                                                                            |
+| --- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| 1   | Which wrappers receive the treatment                                | Every schema with `discriminator.mapping`, ≥ 2 subtypes AND ≥ 1 common prop                      |
+| 2   | Transitive type unification                                         | Yes. If a prop's refs are ALL subtypes of another wrapper W, the getter type is `IW`.            |
+| 3   | Interface naming                                                    | `I<WrapperName>` (`IVault`, `IEnrichedChain`, ...)                                               |
+| 4   | Naming of the getter for the active subtype                         | `active`                                                                                         |
+| 5   | Class modifier of the interface                                     | `sealed class` (enables exhaustive pattern matching + `_`/`default:` for forward-compat)         |
+| 6   | Lax intersection (props present in ≥ 80% of subtypes)               | Yes. Missing subtypes get a `@override T? get foo => null;` stub                                 |
+| 7   | Expose the discriminator as a string on the wrapper                 | **No**. Pattern matching IS the discriminator                                                    |
+| 8   | `_active` cached or computed                                        | **Cached** (field set in `fromJson`, not recomputed on access)                                   |
+| 9   | `_active` must stay out of `==`/`hashCode`/`copyWith`/`toJson`      | Yes (the existing regex filters it because it isn't `final`)                                     |
+| 10  | Support for `separate_models: true`                                 | Out of scope. If enabled, fall back to `abstract interface class`. Follow-up.                    |
+| 11  | Emit an `UnknownVault` placeholder for unknown discriminator values | Out of scope. `vault.active` stays `null` if no case matches. Follow-up if a real need shows up. |
 
 ---
 
-## Escala del cambio
+## Change scale
 
-El spec actual de Fordefi BFF (`arnac-mobile/swagger/bff-openapi.json`) tiene
-**~250 wrappers polimórficos** con `oneOf + discriminator`. Los más relevantes:
+The current Fordefi BFF spec (`arnac-mobile/swagger/bff-openapi.json`) has
+**~250 polymorphic wrappers** with `oneOf + discriminator`. The most relevant:
 
-| Wrapper                                                                      | Subtipos |
+| Wrapper                                                                      | Subtypes |
 | ---------------------------------------------------------------------------- | -------- |
 | `Transaction`, `CreateTransactionResponse`, `GetTransactionResponse`, etc.   | 24       |
 | `CreateTransactionRequest`, `PredictTransactionRequest`, `PredictedSpotSwap` | 23-24    |
@@ -44,191 +44,188 @@ El spec actual de Fordefi BFF (`arnac-mobile/swagger/bff-openapi.json`) tiene
 | `UserAction`                                                                 | 17       |
 | `Vault`, `CreateVaultResponse`, `GetVaultResponse`                           | 15       |
 | `EnrichedChain`, `EnrichedAddress`, `AssetIdentifier`, `AddressBookContact`  | 12-13    |
-| ... ~200 más con 2-7 subtipos                                                |          |
+| ... ~200 more with 2-7 subtypes                                              |          |
 
-Después del filtro automático (≥ 2 subtipos Y ≥ 1 prop común con tipos
-compatibles), estimamos ~150-200 wrappers reciben IXxx. El diff esperado en
-`bff_openapi.swagger.dart` (hoy 212K líneas) crece ~1500-3000 líneas, todas
-aditivas.
+After the automatic filter (≥ 2 subtypes AND ≥ 1 common prop with compatible
+types), we estimate ~150-200 wrappers receive an IXxx. The expected diff in
+`bff_openapi.swagger.dart` (today 212K lines) grows ~1500-3000 lines, all
+additive.
 
 ---
 
-## Fases del trabajo
+## Work phases
 
-### Fase 1 — Cambio al generator
+### Phase 1 — Generator change
 
-Archivos a tocar en `~/projects/swagger_generator/`:
+Files touched in `~/projects/swagger_generator/`:
 
-- `lib/src/code_generators/swagger_models_generator.dart` (~+250 líneas, ~30
-  modificadas)
+- `lib/src/code_generators/swagger_models_generator.dart` (~+250 lines, ~30
+  modified)
 
-Estructura de la implementación:
+Implementation outline:
 
-1. **Data classes** (top-level al final del archivo):
+1. **Data classes** (top-level at the end of the file):
    - `OneOfCommonProp { snakeName, camelName, dartType, isNullable }`
    - `OneOfInterfaceInfo { wrapperName, interfaceName, commonProps, allSubtypeNames }`
    - `OneOfSubtypeMembership { interface, missingProps }`
 
-2. **Estado privado en `SwaggerModelsGenerator`**:
+2. **Private state on `SwaggerModelsGenerator`**:
 
    ```dart
    Map<String, OneOfInterfaceInfo>? _oneOfWrappers;
    Map<String, List<OneOfSubtypeMembership>>? _oneOfSubtypes;
    ```
 
-3. **Método `_buildOneOfAnalysis(Map<String, SwaggerSchema> classes)`**:
-   - Itera schemas, encuentra los que tienen `discriminator.mapping` no vacío
-   - Para cada wrapper:
-     - Resuelve cada subtipo via `$ref` → schema
-     - Une `properties` (con `allOf` resuelto si aplica)
-     - Calcula intersección: por cada property name, signature normalizada
-       (`$ref` o `type+format` o `array<X>`)
-     - Threshold: incluir property si presente en ≥ `ceil(0.8 * count)` subtipos
-       Y todas las apariciones comparten signature
-     - Aplica transitive: si signature divergente pero todas las refs son
-       subtipos del mismo otro wrapper W (post first-pass), usa `IW` como
-       signature unificada
-   - Skipea wrappers con 1 subtipo o 0 common props
-   - Llena `_oneOfWrappers` y `_oneOfSubtypes`
+3. **Method `_buildOneOfAnalysis(Map<String, SwaggerSchema> classes)`**:
+   - Iterates schemas, finds those with a non-empty `discriminator.mapping`
+   - For each wrapper:
+     - Resolves every subtype via `$ref` → schema
+     - Unions `properties` (with `allOf` resolved if applicable)
+     - Computes intersection: for every property name, a normalized signature
+       (`$ref` or `type+format` or `array<X>`)
+     - Threshold: include a property if present in ≥ `ceil(0.8 * count)`
+       subtypes AND all occurrences share the same signature
+     - Applies transitive: if signatures diverge but every ref is a subtype of
+       the same other wrapper W (after the first pass), use `IW` as the unified
+       signature
+   - Skips wrappers with 1 subtype or 0 common props
+   - Populates `_oneOfWrappers` and `_oneOfSubtypes`
 
-4. **Llamada al pre-pass** al inicio de `generateBase`, después de
+4. **Pre-pass call** at the start of `generateBase`, after
    `classes.addAll(classesFromInnerClasses)`.
 
-5. **Método `_generateSealedInterface(OneOfInterfaceInfo info)`** que emite:
+5. **Method `_generateSealedInterface(OneOfInterfaceInfo info)`** that emits:
 
    ```dart
    sealed class IVault {
      String? get id;
      DateTime? get createdAt;
-     // ... un getter por commonProp, siempre nullable
+     // ... one getter per commonProp, always nullable
    }
    ```
 
-6. **Modificaciones a `generateModelClassString`**:
-   - Si es wrapper (en `_oneOfWrappers`):
-     - Prepend `_generateSealedInterface(info)` al output
-     - Modificar el cuerpo de la clase para agregar `IXxx? _active;` field
-       privado + `IXxx? get active => _active;` getter público
-   - Si es subtipo (en `_oneOfSubtypes`):
-     - Cambiar header `class X {` → `class X implements IY {`
-     - Append `@override T? get foo => null;` por cada `missingProp` antes del
-       `}` final
+6. **Changes to `generateModelClassString`**:
+   - If wrapper (in `_oneOfWrappers`):
+     - Prepend `_generateSealedInterface(info)` to the output
+     - Modify the class body to add an `IXxx? _active;` private field +
+       `IXxx? get active => _active;` public getter
+   - If subtype (in `_oneOfSubtypes`):
+     - Change the header `class X {` → `class X implements IY {`
+     - Append `@override T? get foo => null;` for each `missingProp` before the
+       final `}`
 
-7. **Modificación a `generatedFromJson`** (solo cuando `hasMapping`):
-   - Cada case del switch agrega `<varName>._active = <varName>.<subfield>;`
-     después del parse del subtipo
+7. **Change to `generatedFromJson`** (only when `hasMapping`):
+   - Each switch case appends `<varName>._active = <varName>.<subfield>;` after
+     parsing the subtype
 
-### Fase 2 — Tests unitarios del generator
+### Phase 2 — Generator unit tests
 
-En `test/` del fork, fixtures pequeños bajo control:
+In the fork's `test/`, small controlled fixtures:
 
-- **`oneof_strict_intersection_test.dart`**: schema con 3 subtipos que comparten
-  2 props con tipos idénticos. Verifica IXxx con 2 getters + `implements` en los
-  3 subtipos.
-- **`oneof_lax_intersection_test.dart`**: 3 subtipos, una prop solo en 2 de
-  los 3. Verifica que entra en IXxx como nullable y el subtipo faltante tiene
+- **`oneof_strict_intersection_test.dart`**: schema with 3 subtypes sharing 2
+  props with identical types. Verifies IXxx with 2 getters + `implements` on the
+  3 subtypes.
+- **`oneof_lax_intersection_test.dart`**: 3 subtypes, one prop only in 2 of
+  the 3. Verifies it enters IXxx as nullable and the missing subtype gets a
   `@override T? get foo => null;` stub.
-- **`oneof_transitive_test.dart`**: dos wrappers `Outer` e `Inner`; subtipos de
-  `Outer` tienen una prop apuntando a subtipos de `Inner`. Verifica que `IOuter`
-  tiene `IInner? get prop`.
-- **`oneof_skip_test.dart`**: wrapper con 1 subtipo (skip), wrapper con 0 props
-  comunes (skip).
-- **`oneof_type_enum_per_subtype_test.dart`**: caso real Vault — cada subtipo
-  tiene `type` con enum único. Verifica que `type` no entra en IXxx.
+- **`oneof_transitive_test.dart`**: two wrappers `Outer` and `Inner`; subtypes
+  of `Outer` have a prop pointing to subtypes of `Inner`. Verifies that `IOuter`
+  gets `IInner? get prop`.
+- **`oneof_skip_test.dart`**: wrapper with 1 subtype (skip), wrapper with 0
+  common props (skip).
+- **`oneof_type_enum_per_subtype_test.dart`**: real Vault case — each subtype
+  has `type` with a unique enum. Verifies `type` does NOT enter IXxx.
 
-Correr con `dart test` desde `~/projects/swagger_generator`.
+Run with `dart test` from `~/projects/swagger_generator`.
 
-### Fase 3 — Validación contra el schema real
+### Phase 3 — Validation against the real schema
 
-Sin commitear cambios a arnac-mobile:
+Without committing changes to arnac-mobile:
 
-1. Editar local `arnac-mobile/pubspec.yaml:135-138` temporalmente:
+1. Temporarily edit `arnac-mobile/pubspec.yaml:135-138`:
    ```yaml
    swagger_dart_code_generator:
      path: /Users/davidfaerman/projects/swagger_generator
    ```
-2. **Daisy/David corre** desde main worktree (no puedo correrlo yo):
+2. **David runs** from the main worktree (I can't run it myself):
    ```bash
    arnac-mobile/scripts/build.sh
    ```
-3. Comparar `lib/core/network/rest/swagger/bff_openapi.swagger.dart`
-   antes/después.
+3. Compare `lib/core/network/rest/swagger/bff_openapi.swagger.dart`
+   before/after.
 
-**Criterio de aceptación del diff**:
+**Diff acceptance criteria**:
 
-- Diff puramente aditivo. `git diff --stat` muestra solo adiciones de líneas,
-  sin deletions.
-- Cambios legítimos no-aditivos esperados (acotados): los headers de clases tipo
-  `class EvmVault {` → `class EvmVault implements IVault {` (una palabra
-  agregada inline).
-- Si hay líneas borradas en cualquier otro lado: **bug**, detengo y debuggeo.
+- Purely additive diff. `git diff --stat` shows only line additions, no
+  deletions.
+- Expected (bounded) non-additive changes: class headers like `class EvmVault {`
+  → `class EvmVault implements IVault {` (one inline word added).
+- If lines are deleted anywhere else: **bug**, I stop and debug.
 
-### Fase 4 — Compile check de arnac-mobile
+### Phase 4 — arnac-mobile compile check
 
-Con el output regenerado:
+With the regenerated output:
 
 ```bash
 arnac-mobile/scripts/analyze.sh
 ```
 
-Debe pasar limpio. Prueba: cero call-sites existentes rompen. Todo el código de
-hoy que hace `vault.evm?.X`, `chain.solana?.Y`, `addr.cosmos?.Z`, sigue
-compilando.
+Must pass cleanly. This proves: zero existing call-sites break. All code that
+today does `vault.evm?.X`, `chain.solana?.Y`, `addr.cosmos?.Z` still compiles.
 
 ```bash
 arnac-mobile/scripts/test-flutter.sh
 ```
 
-Los tests existentes que tocan Vault/Chain/Address/AssetIdentifier deben seguir
-verdes.
+Existing tests touching Vault/Chain/Address/AssetIdentifier must stay green.
 
-Si algo rompe acá, paro y muestro el error.
+If anything breaks here, I stop and surface the error.
 
-### Fase 5 — PR al fork + bump en arnac-mobile
+### Phase 5 — PR to the fork + bump in arnac-mobile
 
-Si Fase 4 pasa:
+If Phase 4 passes:
 
-1. Commit en branch `oneof-common-interface` del fork → push a
+1. Commit on the fork's `oneof-common-interface` branch → push to
    `arnac-io/swagger-dart-code-generator`
-2. PR contra `fordefi_master` con link a este plan
-3. Una vez mergeado: bump del `ref:` en `arnac-mobile/pubspec.yaml`
-4. `arnac-mobile/scripts/pub-get.sh` para fijar el lockfile
-5. PR en arnac-mobile que sube **sólo** el bump del ref + el output regenerado.
+2. PR against `fordefi_master` with a link to this plan
+3. Once merged: bump the `ref:` in `arnac-mobile/pubspec.yaml`
+4. `arnac-mobile/scripts/pub-get.sh` to pin the lockfile
+5. PR in arnac-mobile that ships **only** the ref bump + regenerated output.
 
-### Fase 6 (PR separado, opcional) — Cleanup de `chain_adapter`
+### Phase 6 (separate PR, optional) — `chain_adapter` cleanup
 
-Aprovechar la nueva API en arnac-mobile:
+Take advantage of the new API in arnac-mobile:
 
-- Reemplazar `chainVaultFrom(v)` por `v.active` directo
-- Reemplazar cadenas `??` por `wrapper.active?.X`
-- Borrar interfaces obsoletas (`ChainInfo`, `ChainAssetId`, `ChainVault`,
-  `ChainAddress`) si quedan vacías post-migración, o achicarlas a sólo los
-  miembros que el wrapper no provee
-- Eliminar `chain_adapter/factories.dart`
+- Replace `chainVaultFrom(v)` with `v.active` directly
+- Replace `??` chains with `wrapper.active?.X`
+- Delete obsolete interfaces (`ChainInfo`, `ChainAssetId`, `ChainVault`,
+  `ChainAddress`) if they end up empty post-migration, or shrink them to just
+  the members the wrapper doesn't provide
+- Delete `chain_adapter/factories.dart`
 
-Esperado: 785 líneas → ~200 líneas.
+Expected: 785 lines → ~200 lines.
 
 ---
 
-## Cómo se usa el código después
+## How the code is used afterwards
 
-### Acceso a campos comunes
+### Common field access
 
 ```dart
-// HOY:
+// TODAY:
 final name = vault.evm?.name
     ?? vault.solana?.name
     ?? vault.cosmos?.name
-    ?? /* ... 12 más */;
+    ?? /* ... 12 more */;
 
-// DESPUÉS:
+// AFTER:
 final name = vault.active?.name;
 ```
 
-### Pattern matching exhaustivo
+### Exhaustive pattern matching
 
 ```dart
-// HOY: 15-way if/else, sin compile-time guarantee
+// TODAY: 15-way if/else, no compile-time guarantee
 String describeVault(Vault v) {
   if (v.evm != null) return 'EVM: ${v.evm!.address}';
   if (v.solana != null) return 'Solana: ${v.solana!.address}';
@@ -236,120 +233,120 @@ String describeVault(Vault v) {
   return 'unknown';
 }
 
-// DESPUÉS: switch sobre sealed, compile-time exhaustive
+// AFTER: switch over a sealed type, compile-time exhaustive
 String describeVault(Vault v) => switch (v.active) {
   EvmVault(:final address)    => 'EVM: $address',
   SolanaVault(:final address) => 'Solana: $address',
-  // ... el compilador rompe el build si me falta un caso
+  // ... the compiler breaks the build if a case is missing
   null                        => 'unknown',
 };
 ```
 
-### Pattern matching con forward-compat
+### Pattern matching with forward-compat
 
 ```dart
-// Caso "no me importa cada chain, sólo agrupo":
+// "I don't care about each chain, just group them":
 final label = switch (vault.active) {
   EvmVault()    => 'EVM',
   SolanaVault() => 'Solana',
-  _             => 'other',     // ← nuevas chains caen acá, no rompe
+  _             => 'other',     // ← new chains fall here, no break
 };
 ```
 
-### Funciones genéricas que aceptan cualquier vault
+### Generic functions accepting any vault
 
 ```dart
 void displayVault(IVault vault) {
   print('${vault.name} (id: ${vault.id}, created: ${vault.createdAt})');
 }
 
-// Llamadas:
+// Calls:
 displayVault(vault.evm!);      // OK, EvmVault implements IVault
-displayVault(vault.active!);   // OK, active es IVault?
+displayVault(vault.active!);   // OK, active is IVault?
 ```
 
 ### Transitive: AssetIdentifier.chain ⇒ IEnrichedChain
 
 ```dart
-// HOY:
+// TODAY:
 final chainName = assetId.evm?.chain.name
     ?? assetId.solana?.chain.name
     ?? assetId.cosmos?.chain.name
-    ?? /* ... 10 más */;
+    ?? /* ... 10 more */;
 
-// DESPUÉS:
+// AFTER:
 final chainName = assetId.active?.chain?.name;
 //                                ^^^^^^^
-//                                IEnrichedChain? gracias a transitive
+//                                IEnrichedChain? via transitive unification
 ```
 
-### Identity preservada (no hay re-alocación)
+### Identity preserved (no re-allocation)
 
 ```dart
 final a = vault.active;
 final b = vault.active;
-identical(a, b);  // true — devuelve el mismo objeto cada vez
+identical(a, b);  // true — same object returned every time
 a == b;           // true
 ```
 
-Esto evita rebuilds espurios en Flutter cuando `vault` no cambia.
+This avoids spurious rebuilds in Flutter when `vault` doesn't change.
 
 ---
 
-## Validación
+## Validation
 
-### Nivel 1 — Tests unitarios del generator
+### Level 1 — Generator unit tests
 
-Output: ` dart test` en el fork.
+Output: `dart test` in the fork.
 
-Cubre: las 5 fixtures de Fase 2. Falla rápido si la lógica de intersección,
-transitive, o emisión de stubs rompe.
+Covers: the 5 fixtures from Phase 2. Fails fast if intersection, transitive, or
+stub-emission logic breaks.
 
-### Nivel 2 — Diff manual del output regenerado
+### Level 2 — Manual diff of the regenerated output
 
 ```bash
-# Después de regen:
+# After regen:
 git -C /Users/davidfaerman/projects/arnac diff arnac-mobile/lib/core/network/rest/swagger/bff_openapi.swagger.dart \
   | grep '^-[^-]'
-# Debería estar vacío excepto líneas de header tipo `class X {` modificadas a `class X implements IY {`
+# Should be empty except for class header lines `class X {` modified to `class X implements IY {`
 ```
 
-Si el grep muestra otra cosa borrada → bug.
+If grep shows anything else deleted → bug.
 
-### Nivel 3 — Static analyzer
+### Level 3 — Static analyzer
 
 ```bash
 arnac-mobile/scripts/analyze.sh
 ```
 
-Debe terminar con cero errores. Prueba: backward compatibility de call-sites.
+Must finish with zero errors. Proves: backward compatibility of call-sites.
 
-### Nivel 4 — Suite Flutter existente
+### Level 4 — Existing Flutter suite
 
 ```bash
 arnac-mobile/scripts/test-flutter.sh
 ```
 
-Cero regresiones en tests que tocan los 4 wrappers principales (Vault,
-EnrichedChain, EnrichedAddress, AssetIdentifier).
+Zero regressions in tests touching the 4 main wrappers (Vault, EnrichedChain,
+EnrichedAddress, AssetIdentifier).
 
-### Nivel 5 — Smoke test de la nueva API
+### Level 5 — Smoke test of the new API
 
-Test ad-hoc post-regen:
+Ad-hoc post-regen test:
 
 ```dart
 test('Vault.active works for EVM', () {
   final json = jsonDecode(evmVaultFixtureJson);
   final v = Vault.fromJson(json);
 
-  expect(v.evm, isNotNull);                // legacy path
-  expect(v.active, isNotNull);             // new path
-  expect(v.active, isA<EvmVault>());        // sealed/pattern compat
-  expect(v.active?.id, v.evm?.id);          // getter equivalence
-  expect(identical(v.active, v.evm), true); // identity preserved
+  expect(v.evm, isNotNull);                 // legacy path
+  expect(v.active, isNotNull);              // new path
+  expect(v.active, isA<EvmVault>());         // sealed/pattern compat
+  expect(v.active?.id, v.evm?.id);           // getter equivalence
+  expect(identical(v.active, v.evm), true);  // identity preserved
 });
 
-test('Vault.active null para discriminator desconocido', () {
+test('Vault.active null for unknown discriminator', () {
   final json = {'type': 'monad', /* fields */};
   final v = Vault.fromJson(json);
 
@@ -357,56 +354,55 @@ test('Vault.active null para discriminator desconocido', () {
 });
 ```
 
-### Nivel 6 — Equivalencia adapter ↔ active (durante Fase 6)
+### Level 6 — adapter ↔ active equivalence (during Phase 6)
 
-Antes de borrar `chainVaultFrom`, un test que para cada chain real:
+Before deleting `chainVaultFrom`, a test that, for every real chain:
 
 ```dart
 test('chainVaultFrom matches vault.active for $chain', () {
   final v = parseRealVaultJson(chain);
   expect(chainVaultFrom(v)?.name, v.active?.name);
   expect(chainVaultFrom(v)?.id, v.active?.id);
-  // ... etc para los ~14 campos comunes
+  // ... etc for the ~14 common fields
 });
 ```
 
-Si los 15 chains pasan → safe to delete `chainVaultFrom`.
+If all 15 chains pass → safe to delete `chainVaultFrom`.
 
 ---
 
-## Checkpoints de revisión
+## Review checkpoints
 
-Voy a parar y consultar en estos momentos:
+I'll stop and check in at these moments:
 
-1. **Post Fase 1**: muestro el diff del fork antes de pushearlo.
-2. **Post Fase 3 (diff de bff_openapi.swagger.dart)**: pasamos el diff juntos
-   antes de declarar éxito.
-3. **Si Fase 4 falla en analyze/test**: paro, muestro el error, debuggeamos
-   juntos.
-4. **Antes de Fase 5 (PR al fork)**: confirmás que el PR vaya.
-
----
-
-## Riesgos identificados
-
-| Riesgo                                                                       | Mitigación                                                                                                                                                                |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Bug en signature comparison entre subtipos → IXxx mal tipado                 | Tests unitarios cubriendo refs, primitivos con format, arrays                                                                                                             |
-| Diff de `bff_openapi.swagger.dart` enorme alarma al manager                  | Diff es 100% aditivo; verificable con `grep '^-[^-]'`. Si necesita, puedo hacer un modo selectivo (sólo Vault/Chain/Address/AssetIdentifier) controlable via `build.yaml` |
-| Colisión de nombres (subtipo con field `active`)                             | Pre-pass detecta y reporta. Si pasa, usar `$active` o variar el getter name vía option                                                                                    |
-| Performance: switch del fromJson recibe `vault._active = ...` extra por case | Trivial — un puntero por parse, O(1), no afecta hot paths                                                                                                                 |
-| `separate_models: true` activado en el futuro                                | Fuera de scope. El generator emitiría sealed con subtipos en otros archivos → compile error. Follow-up: detectar la flag y degradar a `abstract interface class`          |
-| BE agrega un chain nuevo y un switch sin `_` rompe el build de mobile        | **Comportamiento deseado** del sealed: te avisa que hay que manejarlo. Si querés graceful, escribís `_ => ...` en el switch desde el inicio                               |
+1. **After Phase 1**: I show the fork diff before pushing.
+2. **After Phase 3 (bff_openapi.swagger.dart diff)**: we walk the diff together
+   before declaring success.
+3. **If Phase 4 fails on analyze/test**: I stop, show the error, debug together.
+4. **Before Phase 5 (PR to fork)**: you confirm the PR should go out.
 
 ---
 
-## No incluido en este scope
+## Identified risks
 
-- Refactor de `chain_adapter` y call-sites en arnac-mobile (Fase 6, PR
-  separado).
-- Generación de `UnknownVault` placeholder (follow-up si aparece).
-- Soporte para `separate_models: true` (follow-up).
-- Configuración via `build.yaml` del threshold lax (80%) o del prefix `I`
+| Risk                                                                        | Mitigation                                                                                                                                                                 |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bug in signature comparison across subtypes → mistyped IXxx                 | Unit tests covering refs, primitives with format, arrays                                                                                                                   |
+| Huge `bff_openapi.swagger.dart` diff alarms the manager                     | Diff is 100% additive; verifiable with `grep '^-[^-]'`. If needed, I can do a selective mode (only Vault/Chain/Address/AssetIdentifier) controllable via `build.yaml`      |
+| Name collision (subtype with a field named `active`)                        | Pre-pass detects and reports. If it happens, use `$active` or vary the getter name via an option                                                                           |
+| Performance: `fromJson` switch gets an extra `vault._active = ...` per case | Trivial — one pointer per parse, O(1), doesn't affect hot paths                                                                                                            |
+| `separate_models: true` enabled in the future                               | Out of scope. The generator would emit a sealed class with subtypes in other files → compile error. Follow-up: detect the flag and fall back to `abstract interface class` |
+| BE adds a new chain and a `_`-less switch breaks the mobile build           | **Desired behavior** of sealed types: it warns you to handle it. If you want graceful, write `_ => ...` in the switch from day one                                         |
+
+---
+
+## Not in scope
+
+- Refactor of `chain_adapter` and call-sites in arnac-mobile (Phase 6, separate
+  PR).
+- Generation of an `UnknownVault` placeholder (follow-up if needed).
+- Support for `separate_models: true` (follow-up).
+- Configuration via `build.yaml` of the lax threshold (80%) or the `I` prefix
   (follow-up).
-- Migración a OpenAPI Generator + Dio (proyecto separado, bloqueado por manager
-  hoy).
+- Migration to OpenAPI Generator + Dio (separate project, blocked by manager
+  today).
