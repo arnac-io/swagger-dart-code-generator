@@ -19,6 +19,18 @@ abstract class SwaggerModelsGenerator extends SwaggerGeneratorBase {
 
   SwaggerModelsGenerator(this._options);
 
+  /// Wrappers detected with `oneOf` + `discriminator.mapping` that should
+  /// emit a `sealed class I<wrapperName>` interface alongside themselves.
+  /// Populated by [_buildOneOfAnalysis] at the start of [generateBase].
+  /// Key: PascalCase wrapper class name.
+  Map<String, OneOfInterfaceInfo> _oneOfWrappers = {};
+
+  /// Subtype classes (concrete types referenced from some wrapper's
+  /// discriminator mapping) that need `implements I<wrapperName>` and
+  /// null-override stubs for any missing common property.
+  /// Key: PascalCase subtype class name.
+  Map<String, List<OneOfSubtypeMembership>> _oneOfSubtypes = {};
+
   String generate({
     required SwaggerRoot root,
     required String fileName,
@@ -293,6 +305,10 @@ abstract class SwaggerModelsGenerator extends SwaggerGeneratorBase {
     if (classes.isEmpty) {
       return allEnumsString;
     }
+
+    // Analyze `oneOf` + `discriminator` wrappers up front so
+    // generateModelClassString can decorate wrapper/subtype emissions.
+    _buildOneOfAnalysis(classes);
 
     var results = classes.keys.map((String className) {
       if (classes['enum'] != null) {
@@ -1548,15 +1564,44 @@ String toString() => jsonEncode(this);
 
     final createToJson = generateCreateToJson(schema, validatedClassName);
 
+    // ── oneOf-interface decorations ─────────────────────────────────────────
+    // For wrappers: prepend `sealed class I<wrapperName> { ... }`, inject a
+    // private `_active` field + public `active` getter inside the wrapper.
+    // For subtypes: append `implements IFoo[, IBar]` to the class header and
+    // emit `@override T? get foo => null;` stubs for missing common props.
+    final oneOfWrapperInfo = _oneOfWrappers[validatedClassName];
+    final oneOfSubtypeMemberships = _oneOfSubtypes[validatedClassName] ?? const [];
+
+    final oneOfInterfaceBlock = oneOfWrapperInfo == null
+        ? ''
+        : _generateSealedInterfaceBlock(oneOfWrapperInfo);
+
+    final oneOfWrapperExtras = oneOfWrapperInfo == null
+        ? ''
+        : _generateWrapperActiveMembers(oneOfWrapperInfo);
+
+    // A subtype can appear in the same wrapper's mapping under multiple
+    // discriminator values (e.g. `equal` and `not_equal` both point to the
+    // same payload class). That registers the same membership twice. Dedupe
+    // by interface name so we don't emit `implements IFoo, IFoo`.
+    final oneOfImplementsClause = oneOfSubtypeMemberships.isEmpty
+        ? ''
+        : ' implements ${oneOfSubtypeMemberships.map((m) => m.interface.interfaceName).toSet().join(', ')}';
+
+    final oneOfSubtypeStubs = oneOfSubtypeMemberships.isEmpty
+        ? ''
+        : _generateSubtypeMissingStubs(oneOfSubtypeMemberships);
+
     final generatedClass = '''
+$oneOfInterfaceBlock
 @JsonSerializable(explicitToJson: true $createToJson)
-class $validatedClassName{
+class $validatedClassName$oneOfImplementsClause{
 \t $validatedClassName($generatedConstructorProperties);\n
 \t$fromJson${hasMapping ? '' : ''}\n
 \t$toJson${hasMapping ? '' : ''}\n
 $generatedProperties
 \tstatic const fromJsonFactory = _\$${validatedClassName}FromJson;
-
+$oneOfWrapperExtras$oneOfSubtypeStubs
 $equalsOverride
 
 $toStringOverride
@@ -1569,6 +1614,46 @@ $copyWithMethod
     return generatedClass;
   }
 
+  /// Emits the `sealed class IXxx { ... }` block that lives next to a wrapper.
+  String _generateSealedInterfaceBlock(OneOfInterfaceInfo info) {
+    final getters = info.commonProps
+        .map((p) => '\t${p.dartType}? get ${p.camelName};')
+        .join('\n');
+    return '''
+/// Common contract for all subtypes of [${info.wrapperName}], generated from
+/// the OpenAPI `oneOf` + `discriminator` declaration. All subtypes
+/// (${info.subtypeNames.join(', ')}) `implements ${info.interfaceName}`,
+/// which enables exhaustive pattern matching on `${info.wrapperName}.active`.
+sealed class ${info.interfaceName} {
+$getters
+}
+''';
+  }
+
+  /// Emits the `_active` private field and public `active` getter that the
+  /// wrapper class exposes. Called inside the wrapper class body.
+  String _generateWrapperActiveMembers(OneOfInterfaceInfo info) {
+    return '\n\t${info.interfaceName}? _active;\n'
+        '\t${info.interfaceName}? get active => _active;\n';
+  }
+
+  /// Emits `@override T? get foo => null;` stubs for properties that some
+  /// subtype lacks but its IXxx interface requires.
+  String _generateSubtypeMissingStubs(List<OneOfSubtypeMembership> ms) {
+    // A subtype may participate in multiple interfaces; de-duplicate by
+    // property name so we don't emit conflicting stubs.
+    final seen = <String>{};
+    final lines = <String>[];
+    for (final m in ms) {
+      for (final p in m.missingProps) {
+        if (!seen.add(p.camelName)) continue;
+        lines.add('\t@override ${p.dartType}? get ${p.camelName} => null;');
+      }
+    }
+    if (lines.isEmpty) return '';
+    return '\n${lines.join('\n')}\n';
+  }
+
   String generatedFromJson(SwaggerSchema schema, String validatedClassName) {
     final hasMapping = schema.discriminator?.mapping.isNotEmpty ?? false;
     final reporterCode = '\t\tSwaggerReporterHelper.report(\'GenerateError in $validatedClassName \${ex.toString()}\');\n';
@@ -1576,6 +1661,23 @@ $copyWithMethod
       final discriminator = schema.discriminator!;
       final propertyName = discriminator.propertyName;
       final responseVar = validatedClassName.camelCase;
+
+      // If this wrapper produces an IXxx interface, each case must also
+      // populate the wrapper's `_active` field so callers get O(1) access
+      // without re-scanning the 15 nullable fields on every read.
+      final hasInterface = _oneOfWrappers.containsKey(validatedClassName);
+
+      String fieldNameFor(MapEntry<String, String> entry) =>
+          entry.key == 'dynamic' ? 'dynamicField' : entry.key.camelCase;
+
+      String caseBody(MapEntry<String, String> entry) {
+        final field = fieldNameFor(entry);
+        final assign =
+            '$responseVar.$field = _\$${entry.value.split('/').last.pascalCase}FromJson(json);';
+        final activeAssign =
+            hasInterface ? ' $responseVar._active = $responseVar.$field;' : '';
+        return 'case \'${entry.key}\': try { $assign$activeAssign } catch(ex) {$reporterCode} break;';
+      }
 
       return 'static $validatedClassName _\$${validatedClassName}FromJson(Map<String, dynamic> json) { '
           '\ttry { '
@@ -1586,12 +1688,12 @@ $copyWithMethod
           '\t\trethrow;'
           '}'
           '}\n\n'
-          '${discriminator.mapping.entries.map((entry) => '${entry.value.getRef()}? ${entry.key == 'dynamic' ? 'dynamicField' : entry.key.camelCase};').join('\n')}'
+          '${discriminator.mapping.entries.map((entry) => '${entry.value.getRef()}? ${fieldNameFor(entry)};').join('\n')}'
           '\n\n'
           'factory $validatedClassName.fromJson(Map<String, dynamic> json) {'
           '\t\tvar $responseVar = $validatedClassName();'
           '\t\tswitch (json[\'$propertyName\']) {'
-          '\t\t\t${discriminator.mapping.entries.map((entry) => 'case \'${entry.key}\': try { $responseVar.${entry.key == 'dynamic' ? 'dynamicField' : entry.key.camelCase} = _\$${entry.value.split('/').last.pascalCase}FromJson(json); } catch(ex) {$reporterCode} break;').join('\n')}'
+          '\t\t\t${discriminator.mapping.entries.map(caseBody).join('\n')}'
           '\t\t}'
           '\treturn $responseVar;'
           '}';
@@ -1841,6 +1943,272 @@ $allHashComponents;
     return currentProperties;
   }
 
+  // ===========================================================================
+  // oneOf + discriminator analysis
+  //
+  // Pre-pass that scans every schema with `discriminator.mapping`. For each
+  // such "wrapper" we compute the intersection of properties across all
+  // subtypes (strict where types agree exactly; lax for properties present in
+  // ≥ 80% of subtypes; transitive when a property points to refs that are
+  // themselves all subtypes of another wrapper, in which case the type is
+  // that wrapper's interface).
+  //
+  // The results populate [_oneOfWrappers] and [_oneOfSubtypes]; the emission
+  // code in [generateModelClassString] then consults these maps to:
+  //   - prepend a `sealed class I<wrapperName>` ahead of each wrapper class
+  //   - inject `IXxx? _active;` field + `active` getter into the wrapper
+  //   - add `implements IXxx` to subtype class headers
+  //   - emit `@override T? get foo => null;` stubs in subtypes lacking a
+  //     property that's part of the lax intersection
+  // ===========================================================================
+
+  void _buildOneOfAnalysis(Map<String, SwaggerSchema> classes) {
+    _oneOfWrappers = {};
+    _oneOfSubtypes = {};
+
+    // ---- Pass 1: collect candidate wrappers and their subtype schemas ----
+    final working = <String, _OneOfWorkingState>{};
+
+    classes.forEach((rawClassName, schema) {
+      final mapping = schema.discriminator?.mapping;
+      if (mapping == null || mapping.isEmpty) return;
+      if (mapping.length < 2) return;
+
+      final wrapperName = getValidatedClassName(rawClassName).pascalCase;
+
+      final subtypes = <_OneOfSubtypeRef>[];
+      for (final entry in mapping.entries) {
+        final refName = entry.value.split('/').last;
+        final subSchema = classes[getValidatedClassName(refName)];
+        if (subSchema == null) continue;
+        subtypes.add(_OneOfSubtypeRef(refName.pascalCase, subSchema));
+      }
+      if (subtypes.length < 2) return;
+
+      // Gather (snake_name → list of subtype-schema pairs that declare it).
+      // Skip property names listed in `options.ignoredKeys` — the generator
+      // filters those from subtype field emission, so promoting them to the
+      // interface would yield abstract getters with no concrete impl.
+      final ignored = <String>{
+        ...options.ignoredKeys,
+        ...options.ignoredKeys.map((k) => _safeCamelCase(k)),
+      };
+      final propMap = <String, List<_OneOfPropOccurrence>>{};
+      for (final st in subtypes) {
+        final props = _allPropsOf(st.schema, classes);
+        for (final pe in props.entries) {
+          if (ignored.contains(pe.key)) continue;
+          propMap
+              .putIfAbsent(pe.key, () => [])
+              .add(_OneOfPropOccurrence(st.name, pe.value));
+        }
+      }
+
+      final total = subtypes.length;
+      // threshold = ceil(0.8 * total)
+      final threshold = (total * 4 + 4) ~/ 5;
+
+      working[wrapperName] = _OneOfWorkingState(
+        wrapperName: wrapperName,
+        subtypes: subtypes,
+        propMap: propMap,
+        threshold: threshold,
+      );
+    });
+
+    // Reverse map: subtype name -> wrapper that owns it (for transitive pass).
+    final subtypeOwner = <String, String>{};
+    for (final w in working.values) {
+      for (final st in w.subtypes) {
+        subtypeOwner[st.name] = w.wrapperName;
+      }
+    }
+
+    // ---- Pass 2a: strict + lax intersection (signatures must agree) ----
+    for (final w in working.values) {
+      for (final entry in w.propMap.entries) {
+        final propName = entry.key;
+        final occurrences = entry.value;
+        if (occurrences.length < w.threshold) continue;
+
+        // Inline enums (e.g. `{type: string, enum: ['evm']}`) get materialized
+        // by the generator as a per-class enum (`EvmVaultTypeGenerated`) that
+        // diverges across subtypes even when the raw schema's type/format
+        // matches. Reject any prop where *any* occurrence carries an inline
+        // enum so we don't promise `String?` to consumers and then get
+        // `enums.XxxTypeGenerated` from the subtype's actual field.
+        if (occurrences.any((o) => _hasInlineEnum(o.schema))) continue;
+
+        final firstSig = _schemaSignature(occurrences.first.schema);
+        final allAgree =
+            occurrences.every((o) => _schemaSignature(o.schema) == firstSig);
+        if (!allAgree) continue;
+
+        final dartType = _schemaToDartType(occurrences.first.schema, classes);
+        if (dartType == kDynamic) continue;
+
+        w.commonProps.add(OneOfCommonProp(
+          snakeName: propName,
+          camelName: _safeCamelCase(propName),
+          dartType: dartType,
+        ));
+        w.acceptedPropNames.add(propName);
+      }
+    }
+
+    // ---- Pass 2b: transitive — a prop where all occurrences are refs to
+    // ---- subtypes of THE SAME other wrapper W can be exposed as IW? ----
+    for (final w in working.values) {
+      for (final entry in w.propMap.entries) {
+        final propName = entry.key;
+        if (w.acceptedPropNames.contains(propName)) continue;
+
+        final occurrences = entry.value;
+        if (occurrences.length < w.threshold) continue;
+        if (!occurrences.every((o) => o.schema.hasRef)) continue;
+
+        final ownerSet = <String>{};
+        for (final o in occurrences) {
+          final refName = o.schema.ref.split('/').last.pascalCase;
+          final owner = subtypeOwner[refName];
+          if (owner == null) {
+            ownerSet.clear();
+            break;
+          }
+          ownerSet.add(owner);
+        }
+        if (ownerSet.length != 1) continue;
+        final commonOwner = ownerSet.first;
+        // The owner wrapper must itself end up with a non-empty interface,
+        // otherwise IW won't be emitted. We can't fully verify that yet,
+        // but require commonProps > 0 at this point as a proxy.
+        final ownerState = working[commonOwner];
+        if (ownerState == null || ownerState.commonProps.isEmpty) continue;
+
+        w.commonProps.add(OneOfCommonProp(
+          snakeName: propName,
+          camelName: _safeCamelCase(propName),
+          dartType: 'I$commonOwner',
+        ));
+        w.acceptedPropNames.add(propName);
+      }
+    }
+
+    // ---- Pass 3: finalize. Skip wrappers with no common props. ----
+    for (final w in working.values) {
+      if (w.commonProps.isEmpty) continue;
+
+      final info = OneOfInterfaceInfo(
+        wrapperName: w.wrapperName,
+        interfaceName: 'I${w.wrapperName}',
+        commonProps: List.unmodifiable(w.commonProps),
+        subtypeNames: w.subtypes.map((s) => s.name).toList(growable: false),
+      );
+      _oneOfWrappers[w.wrapperName] = info;
+
+      for (final st in w.subtypes) {
+        final declared = _allPropsOf(st.schema, classes);
+        final missing = info.commonProps
+            .where((p) => !declared.containsKey(p.snakeName))
+            .toList(growable: false);
+        _oneOfSubtypes
+            .putIfAbsent(st.name, () => [])
+            .add(OneOfSubtypeMembership(
+              interface: info,
+              missingProps: missing,
+            ));
+      }
+    }
+  }
+
+  /// Collects all schema properties of [schema], merging properties from any
+  /// `allOf` references (resolved via [schemas]). Recursion is bounded.
+  Map<String, SwaggerSchema> _allPropsOf(
+    SwaggerSchema schema,
+    Map<String, SwaggerSchema> schemas, [
+    int depth = 5,
+  ]) {
+    if (depth == 0) return {};
+    final result = <String, SwaggerSchema>{};
+    for (final part in schema.allOf) {
+      if (part.hasRef) {
+        final refName = part.ref.split('/').last;
+        final refSchema = schemas[getValidatedClassName(refName)];
+        if (refSchema != null) {
+          result.addAll(_allPropsOf(refSchema, schemas, depth - 1));
+        }
+      } else {
+        result.addAll(part.properties);
+      }
+    }
+    result.addAll(schema.properties);
+    return result;
+  }
+
+  /// A normalized signature string used to decide whether two property
+  /// schemas are "the same type" across subtypes. Equal signatures imply the
+  /// generator will emit the same Dart type for them.
+  String _schemaSignature(SwaggerSchema s) {
+    if (s.hasRef) return 'ref:${s.ref.split('/').last}';
+    if (s.type == 'array') {
+      final items = s.items;
+      return 'array<${items == null ? '' : _schemaSignature(items)}>';
+    }
+    final type = s.type;
+    if (type.isEmpty) return 'unknown';
+    return '$type:${s.format}';
+  }
+
+  /// Maps a property's schema to the Dart type string used in the generated
+  /// interface getter. Always returned WITHOUT a trailing `?`; the caller
+  /// appends `?` when emitting the getter.
+  String _schemaToDartType(
+      SwaggerSchema s, Map<String, SwaggerSchema> schemas) {
+    if (s.hasRef) {
+      final refName = s.ref.split('/').last;
+      final pascal = refName.pascalCase;
+      final refSchema = schemas[getValidatedClassName(refName)];
+      if (refSchema?.isEnum == true) return 'enums.$pascal';
+      return pascal;
+    }
+    if (s.type == 'array') {
+      final items = s.items;
+      final inner =
+          items != null ? _schemaToDartType(items, schemas) : 'Object';
+      return 'List<$inner>';
+    }
+    switch (s.type) {
+      case 'string':
+        if (s.format == 'date-time') return 'DateTime';
+        return 'String';
+      case 'integer':
+        return 'int';
+      case 'number':
+        return 'double';
+      case 'boolean':
+        return 'bool';
+      case 'object':
+        return 'Map<String, dynamic>';
+      default:
+        return kDynamic;
+    }
+  }
+
+  /// camelCase that survives identifiers starting with an underscore or
+  /// reserved words. Falls back to the raw name if camelCase would empty it.
+  String _safeCamelCase(String name) {
+    final camel = name.camelCase;
+    return camel.isEmpty ? name : camel;
+  }
+
+  /// True when [s] declares an inline enum (i.e. has explicit `enum` values
+  /// but no `$ref` to a shared enum schema). Such props get materialized as
+  /// a per-class generated enum (e.g. `EvmVaultTypeGenerated`), so two
+  /// subtypes that look schema-identical still diverge in Dart and must be
+  /// excluded from the shared interface.
+  bool _hasInlineEnum(SwaggerSchema s) =>
+      !s.hasRef && s.enumValuesObj.isNotEmpty;
+
   Map<String, SwaggerSchema> getRequestBodiesFromRequests(SwaggerRoot root) {
     final paths = root.paths;
     if (paths.isEmpty) {
@@ -1881,4 +2249,98 @@ class JsonEnumValue {
 
   final String jsonKey;
   final String fromJson;
+}
+
+/// A property in the common interface for an `oneOf` + `discriminator` wrapper.
+/// Emitted as a nullable getter on the generated abstract interface.
+class OneOfCommonProp {
+  OneOfCommonProp({
+    required this.snakeName,
+    required this.camelName,
+    required this.dartType,
+  });
+
+  /// Original schema property name (e.g. "derivation_path").
+  final String snakeName;
+
+  /// Camel-cased property name used in Dart (e.g. "derivationPath").
+  final String camelName;
+
+  /// Dart type of the getter, WITHOUT trailing `?`. The interface always
+  /// declares getters as nullable, so callers see `T?`.
+  /// E.g. "String", "DateTime", "List<OwnedAsset>", "enums.MpcVaultState",
+  /// "IEnrichedChain" (transitive case).
+  final String dartType;
+}
+
+/// Describes one wrapper class with `oneOf` + `discriminator` and the
+/// `sealed class I<wrapperName>` interface to emit alongside it.
+class OneOfInterfaceInfo {
+  OneOfInterfaceInfo({
+    required this.wrapperName,
+    required this.interfaceName,
+    required this.commonProps,
+    required this.subtypeNames,
+  });
+
+  /// PascalCase name of the wrapper class (e.g. "Vault").
+  final String wrapperName;
+
+  /// Name of the generated interface class (e.g. "IVault").
+  final String interfaceName;
+
+  /// Common properties intersected across all subtypes of the discriminator.
+  final List<OneOfCommonProp> commonProps;
+
+  /// PascalCase names of all subtypes participating in the discriminator
+  /// mapping (e.g. ["EvmVault", "SolanaVault", ...]).
+  final List<String> subtypeNames;
+}
+
+/// Marks a subtype class that participates in a `oneOf` + `discriminator`
+/// wrapper. It must `implements <interface.interfaceName>` and provide
+/// `@override T? get name => null;` stubs for any common property it lacks.
+class OneOfSubtypeMembership {
+  OneOfSubtypeMembership({
+    required this.interface,
+    required this.missingProps,
+  });
+
+  final OneOfInterfaceInfo interface;
+
+  /// Properties present in `interface.commonProps` that this subtype's
+  /// schema does NOT declare. Each needs an explicit null-returning getter
+  /// override to satisfy the interface contract.
+  final List<OneOfCommonProp> missingProps;
+}
+
+/// Internal scratch state for [SwaggerModelsGenerator._buildOneOfAnalysis].
+/// Holds per-wrapper working sets while the multi-pass intersection runs.
+class _OneOfWorkingState {
+  _OneOfWorkingState({
+    required this.wrapperName,
+    required this.subtypes,
+    required this.propMap,
+    required this.threshold,
+  });
+
+  final String wrapperName;
+  final List<_OneOfSubtypeRef> subtypes;
+  final Map<String, List<_OneOfPropOccurrence>> propMap;
+  final int threshold;
+
+  final List<OneOfCommonProp> commonProps = [];
+  final Set<String> acceptedPropNames = {};
+}
+
+class _OneOfSubtypeRef {
+  _OneOfSubtypeRef(this.name, this.schema);
+  final String name;
+  final SwaggerSchema schema;
+}
+
+class _OneOfPropOccurrence {
+  _OneOfPropOccurrence(this.subtypeName, this.schema);
+  final String subtypeName;
+  final SwaggerSchema schema;
 }
