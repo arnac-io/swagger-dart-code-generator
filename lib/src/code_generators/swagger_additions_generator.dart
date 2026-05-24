@@ -60,10 +60,11 @@ class SwaggerAdditionsGenerator extends SwaggerGeneratorBase {
 
 import 'client_mapping.dart';
 import 'dart:async';
+import 'package:arnac/core/logger/model/flog/flog.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/http.dart' show MultipartFile;
 import 'package:chopper/chopper.dart' as chopper;
-import 'package:fordefi_swagger_reporter/fordefi_swagger_reporter.dart';''';
+import 'package:swagger_dart_code_generator/src/models/swagger_reporter.dart';''';
 
     final enumsImport = hasEnums
         ? "import '$swaggerFileName.enums.swagger.dart' as enums;"
