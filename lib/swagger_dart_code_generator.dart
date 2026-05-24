@@ -4,6 +4,7 @@ import 'package:build/build.dart';
 import 'package:swagger_dart_code_generator/src/extensions/file_name_extensions.dart';
 import 'package:swagger_dart_code_generator/src/extensions/yaml_extensions.dart';
 import 'package:swagger_dart_code_generator/src/models/generator_options.dart';
+import 'package:swagger_dart_code_generator/src/models/swagger_reporter.dart';
 import 'package:swagger_dart_code_generator/src/swagger_code_generator.dart';
 import 'package:swagger_dart_code_generator/src/swagger_models/swagger_root.dart';
 import 'package:universal_io/io.dart';
