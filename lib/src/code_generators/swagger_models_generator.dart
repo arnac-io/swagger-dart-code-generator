@@ -7,7 +7,6 @@ import 'package:swagger_dart_code_generator/src/code_generators/swagger_requests
 import 'package:swagger_dart_code_generator/src/exception_words.dart';
 import 'package:swagger_dart_code_generator/src/extensions/string_extension.dart';
 import 'package:swagger_dart_code_generator/src/models/generator_options.dart';
-import 'package:swagger_dart_code_generator/src/models/swagger_reporter.dart';
 import 'package:swagger_dart_code_generator/src/swagger_models/responses/swagger_schema.dart';
 import 'package:swagger_dart_code_generator/src/swagger_models/swagger_root.dart';
 
@@ -1684,7 +1683,6 @@ $getters
           'return $validatedClassName.fromJson(json);'
           '} catch(ex) {'
           '$reporterCode'
-          '\t\tFLog.error(text:\'GenerateError in $validatedClassName\');'
           '\t\trethrow;'
           '}'
           '}\n\n'
@@ -1703,7 +1701,6 @@ $getters
         '\t\treturn _\$${validatedClassName}FromJson(json);'
         '\t} catch(ex) { '
         '$reporterCode'
-        '\t\tFLog.error(text: \'GenerateError in $validatedClassName\');'
         '\t\trethrow;'
         '\t} '
         '}';
