@@ -1273,31 +1273,6 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
     return name;
   }
 
-  String generatePropertiesContent(
-    SwaggerRoot root,
-    Map<String, SwaggerSchema> propertiesMap,
-    Map<String, SwaggerSchema> schemas,
-    String className,
-    List<DefaultValueMap> defaultValues,
-    List<String> classesWithNullableLists,
-    List<String> allEnumNames,
-    List<String> allEnumListNames,
-    List<String> requiredProperties,
-    Map<String, SwaggerSchema> allClasses,
-  ) =>
-      generatePropertyContents(
-        root,
-        propertiesMap,
-        schemas,
-        className,
-        defaultValues,
-        classesWithNullableLists,
-        allEnumNames,
-        allEnumListNames,
-        requiredProperties,
-        allClasses,
-      ).join('\n');
-
   /// One emitted field declaration (with its annotations) per property.
   List<String> generatePropertyContents(
     SwaggerRoot root,
@@ -1399,8 +1374,13 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
     return results;
   }
 
+  static final _annotationNameChar = RegExp(r'[\w.$]');
+  static final _whitespace = RegExp(r'\s');
+  static final _fieldModifiers = RegExp(r'^(?:late\s+)?(?:final\s+)?');
+  static final _constructorParameter = RegExp(r'this\.([\w$]+),');
+
   /// Reads the `Type name;` declaration out of one emitted property, skipping
-  /// its leading annotations; null for a property dropped by `ignored_keys`.
+  /// its leading annotations and `late`/`final`; null when there is none.
   ModelField? parseFieldDeclaration(String propertyContent) {
     final s = propertyContent;
     var i = 0;
@@ -1409,7 +1389,7 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
         i++;
       } else if (s[i] == '@') {
         i++;
-        while (i < s.length && RegExp(r'[\w.$]').hasMatch(s[i])) {
+        while (i < s.length && _annotationNameChar.hasMatch(s[i])) {
           i++;
         }
         if (i < s.length && s[i] == '(') {
@@ -1424,8 +1404,9 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
     if (end < 0) {
       return null;
     }
-    final declaration = s.substring(i, end).trim();
-    final split = declaration.lastIndexOf(RegExp(r'\s'));
+    final declaration =
+        s.substring(i, end).trim().replaceFirst(_fieldModifiers, '');
+    final split = declaration.lastIndexOf(_whitespace);
     if (split < 0) {
       return null;
     }
@@ -1611,28 +1592,38 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
       allClasses,
     );
     final generatedProperties = propertyContents.join('\n');
-    final fields =
-        propertyContents.map(parseFieldDeclaration).nonNulls.toList();
+    final fields = [
+      for (final content in propertyContents)
+        // Blank content is a property dropped by `ignored_keys`.
+        if (content.trim().isNotEmpty)
+          parseFieldDeclaration(content) ??
+              (throw StateError(
+                  'Cannot read the field declaration of a $className property:\n$content')),
+    ];
 
     final validatedClassName =
         '${getValidatedClassName(className)}${options.modelPostfix}';
 
-    final mapping = schema.discriminator?.mapping ?? const <String, String>{};
+    final variants = _variantFields(schema);
     // A wrapper's state lives in its variant fields, which the constructor
     // can't set, so it gets value equality but no copyWith.
     final equalityFields = [
       ...fields,
-      for (final entry in mapping.entries)
-        (
-          type: '${entry.value.getRef()}?',
-          name: entry.key == 'dynamic' ? 'dynamicField' : entry.key.camelCase,
-        ),
-      if (mapping.isNotEmpty)
-        (type: 'Map<String, dynamic>?', name: '_undecodedJson'),
+      for (final v in variants) (type: '${v.ref.getRef()}?', name: v.field),
+      if (variants.isNotEmpty)
+        (type: 'Map<String, dynamic>?', name: 'undecodedJson'),
     ];
 
-    final copyWithMethod = mapping.isEmpty
-        ? generateCopyWithContent(fields, validatedClassName)
+    // The constructor drops optional properties listed in `ignored_keys` by
+    // field name, while the field itself is dropped only by JSON key.
+    final constructorParameters = _constructorParameter
+        .allMatches(generatedConstructorProperties)
+        .map((m) => m.group(1))
+        .toSet();
+    final copyWithMethod = variants.isEmpty && options.generateCopyWith
+        ? generateCopyWithContent(
+            fields.where((f) => constructorParameters.contains(f.name)).toList(),
+            validatedClassName)
         : '';
 
     final getHashContent = generateGetHashContent(
@@ -1654,7 +1645,7 @@ String toString() => jsonEncode(this);
 '''
         : '';
 
-    final hasMapping = schema.discriminator?.mapping.isNotEmpty ?? false;
+    final hasMapping = variants.isNotEmpty;
 
     final fromJson = generatedFromJson(schema, validatedClassName);
 
@@ -1902,6 +1893,16 @@ $getters
     return [];
   }
 
+  /// Whether [type] can hold a collection, which `==` would compare by identity.
+  bool _needsDeepEquality(String type) {
+    final t = type.endsWith('?') ? type.substring(0, type.length - 1) : type;
+    return t == kDynamic ||
+        t == 'Object' ||
+        t == 'List' ||
+        t == 'Map' ||
+        ['List<', 'Map<', 'Set<', 'Iterable<'].any(t.startsWith);
+  }
+
   String generateEqualsOverride(
     List<ModelField> fields,
     String validatedClassName,
@@ -1911,16 +1912,18 @@ $getters
       return '';
     }
 
-    final checks = fields.map((f) => f.name).map((e) => '''
-(identical(other.$e, $e) ||
-                const DeepCollectionEquality().equals(other.$e, $e))
-    ''').join(' && ');
+    final checks = fields
+        .map((f) => _needsDeepEquality(f.type)
+            ? 'const DeepCollectionEquality().equals(other.${f.name}, this.${f.name})'
+            : 'other.${f.name} == this.${f.name}')
+        .join(' &&\n            ');
 
     return '''
 @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other is $validatedClassName &&
+            other.runtimeType == runtimeType &&
             $checks);
   }
     ''';
@@ -1958,7 +1961,8 @@ $getters
     final copyWithWrapped =
         '$validatedClassName copyWithWrapped({$copyWithWrappedParameters}) { return $validatedClassName($copyWithWrappedArguments); }';
 
-    return 'extension \$${validatedClassName}Extension on $validatedClassName { $copyWith $copyWithWrapped}';
+    return '/// Shallow copies: nested models and collections are shared with the original.\n'
+        'extension \$${validatedClassName}Extension on $validatedClassName { $copyWith $copyWithWrapped}';
   }
 
   String generateGetHashContent(
@@ -1970,16 +1974,20 @@ $getters
       return '';
     }
 
-    final hashComponents = [
+    final components = [
       'runtimeType',
-      ...fields.map((f) => 'const DeepCollectionEquality().hash(${f.name})'),
-    ].join(',\n');
+      ...fields.map((f) => _needsDeepEquality(f.type)
+          ? 'const DeepCollectionEquality().hash(this.${f.name})'
+          : 'this.${f.name}'),
+    ];
+    // Object.hash takes at most 20 values; beyond that, hash a list.
+    final hash = components.length <= 20
+        ? 'Object.hash(${components.join(',\n')})'
+        : 'Object.hashAll([${components.join(',\n')}])';
 
     return '''
 @override
-int get hashCode => Object.hashAll([
-$hashComponents,
-]);
+int get hashCode => $hash;
 ''';
   }
 

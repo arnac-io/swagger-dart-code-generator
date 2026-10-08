@@ -78,6 +78,7 @@ GeneratorOptions _$GeneratorOptionsFromJson(Map json) => GeneratorOptions(
           const [],
       overrideEqualsAndHashcode:
           json['override_equals_and_hashcode'] as bool? ?? true,
+      generateCopyWith: json['generate_copy_with'] as bool? ?? true,
       overrideToString: json['override_to_string'] as bool? ?? true,
       pageWidth: (json['page_width'] as num?)?.toInt(),
       scalars: (json['scalars'] as Map?)?.map(
@@ -110,6 +111,7 @@ Map<String, dynamic> _$GeneratorOptionsToJson(GeneratorOptions instance) =>
       'page_width': instance.pageWidth,
       'override_to_string': instance.overrideToString,
       'override_equals_and_hashcode': instance.overrideEqualsAndHashcode,
+      'generate_copy_with': instance.generateCopyWith,
       'multipart_file_type': instance.multipartFileType,
       'urlencoded_file_type': instance.urlencodedFileType,
       'with_converter': instance.withConverter,
