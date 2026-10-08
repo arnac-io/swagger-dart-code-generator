@@ -59,15 +59,30 @@ SwaggerSchema _ref(String name) =>
 SwaggerSchema _objectWithProps(Map<String, SwaggerSchema> properties) =>
     SwaggerSchema(type: 'object', properties: properties);
 
-SwaggerModelsGenerator _gen({bool overrideEquals = false}) =>
+SwaggerModelsGenerator _gen({
+  bool overrideEquals = false,
+  bool generateCopyWith = true,
+  List<String> ignoredKeys = const [],
+}) =>
     SwaggerModelsGeneratorV3(GeneratorOptions(
       inputFolder: '',
       outputFolder: '',
       overrideEqualsAndHashcode: overrideEquals,
+      generateCopyWith: generateCopyWith,
+      ignoredKeys: ignoredKeys,
     ));
 
-String _runGenerate(Map<String, SwaggerSchema> schemas) {
-  final generator = _gen();
+String _runGenerate(
+  Map<String, SwaggerSchema> schemas, {
+  bool overrideEquals = false,
+  bool generateCopyWith = true,
+  List<String> ignoredKeys = const [],
+}) {
+  final generator = _gen(
+    overrideEquals: overrideEquals,
+    generateCopyWith: generateCopyWith,
+    ignoredKeys: ignoredKeys,
+  );
   return generator.generateBase(
     root: _root(schemas),
     fileName: 'test',
@@ -483,6 +498,77 @@ void main() {
           contains('return undecoded != null'
               ' ? Map<String, dynamic>.of(undecoded) : _\$W3ToJson(this);'));
       expect(wrapper, isNot(contains('..addAll(')));
+    });
+  });
+
+  group('value equality', () {
+    final schemas = <String, SwaggerSchema>{
+      'Aa': _objectWithProps({'id': _string(), 'child': _ref('Bb')}),
+      'Bb': _objectWithProps({'id': _string()}),
+      'W4': _wrapper(
+        propertyName: 'kind',
+        mapping: {
+          'a': '#/components/schemas/Aa',
+          'b': '#/components/schemas/Bb',
+        },
+      ),
+    };
+
+    Set<String> comparedFields(String cls) =>
+        RegExp(r'other\.(\w+)').allMatches(cls).map((m) => m.group(1)!).toSet()
+          ..remove('runtimeType');
+    Set<String> hashedFields(String cls) {
+      final hash = cls.substring(cls.indexOf('int get hashCode'));
+      return RegExp(r'this\.(\w+)').allMatches(hash).map((m) => m.group(1)!).toSet();
+    }
+
+    test('a plain model compares, hashes and copies every field', () {
+      final out = _runGenerate(schemas, overrideEquals: true);
+      final model = _extractClass(out, 'Aa');
+
+      expect(model, contains('other is Aa &&\n            other.runtimeType == runtimeType'));
+      expect(comparedFields(model), {'id', 'child'});
+      expect(hashedFields(model), {'id', 'child'});
+      expect(
+          out,
+          contains(
+              'extension \$AaExtension on Aa { Aa copyWith({String? id, Bb? child})'));
+      expect(out,
+          contains('Aa copyWithWrapped({Wrapped<String?>? id, Wrapped<Bb?>? child})'));
+    });
+
+    test('a wrapper compares and hashes its variants and undecoded payload, without copyWith',
+        () {
+      final out = _runGenerate(schemas, overrideEquals: true);
+      final wrapper = _extractClass(out, 'W4');
+
+      expect(comparedFields(wrapper), {'a', 'b', 'undecodedJson'});
+      expect(hashedFields(wrapper), {'a', 'b', 'undecodedJson'});
+      expect(out, isNot(contains('W4Extension')));
+    });
+
+    test('overrideEqualsAndHashcode false keeps identity equality', () {
+      final out = _runGenerate(schemas);
+
+      for (final cls in ['Aa', 'W4']) {
+        expect(_extractClass(out, cls), isNot(contains('operator ==')));
+        expect(_extractClass(out, cls), isNot(contains('hashCode')));
+      }
+    });
+
+    test('generateCopyWith false emits no copyWith', () {
+      expect(_runGenerate(schemas, generateCopyWith: false),
+          isNot(contains('copyWith')));
+    });
+
+    test('copyWith passes only fields the constructor accepts', () {
+      final out = _runGenerate({
+        'Cc': _objectWithProps({'id': _string(), 'foo_bar': _string()}),
+      }, ignoredKeys: ['fooBar']);
+
+      expect(_extractClass(out, 'Cc'), contains('String? fooBar;'));
+      expect(out, contains('Cc copyWith({String? id})'));
+      expect(out, isNot(contains('fooBar: fooBar')));
     });
   });
 }
