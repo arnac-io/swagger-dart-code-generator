@@ -28,6 +28,7 @@
 | 9   | `_active` must stay out of `==`/`hashCode`/`copyWith`/`toJson`      | Yes (the existing regex filters it because it isn't `final`)                                     |
 | 10  | Support for `separate_models: true`                                 | Out of scope. If enabled, fall back to `abstract interface class`. Follow-up.                    |
 | 11  | Emit an `UnknownVault` placeholder for unknown discriminator values | Out of scope. `vault.active` stays `null` if no case matches. Follow-up if a real need shows up. |
+| 12  | Payload that matches no variant, or whose variant fails to parse    | Kept and exposed as `undecodedJson` (null once a variant is set); `toJson` writes a copy back. Reported once per unknown value per process. No string discriminator getter (see 7) |
 
 ---
 
@@ -161,6 +162,10 @@ Without committing changes to arnac-mobile:
 - Expected (bounded) non-additive changes: class headers like `class EvmVault {`
   → `class EvmVault implements IVault {` (one inline word added).
 - If lines are deleted anywhere else: **bug**, I stop and debug.
+
+These criteria cover the interface generation only. Decision 12 and later
+rewrite wrapper `fromJson`/`toJson` bodies, so their regenerations are not
+additive.
 
 ### Phase 4 — arnac-mobile compile check
 
@@ -388,7 +393,7 @@ I'll stop and check in at these moments:
 | Risk                                                                        | Mitigation                                                                                                                                                                 |
 | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Bug in signature comparison across subtypes → mistyped IXxx                 | Unit tests covering refs, primitives with format, arrays                                                                                                                   |
-| Huge `bff_openapi.swagger.dart` diff alarms the manager                     | Diff is 100% additive; verifiable with `grep '^-[^-]'`. If needed, I can do a selective mode (only Vault/Chain/Address/AssetIdentifier) controllable via `build.yaml`      |
+| Huge `bff_openapi.swagger.dart` diff alarms the manager                     | Interface generation alone is additive (`grep '^-[^-]'`); decision 12+ rewrite wrapper `fromJson`/`toJson`. If needed, a selective mode (only Vault/Chain/Address/AssetIdentifier) via `build.yaml` |
 | Name collision (subtype with a field named `active`)                        | Pre-pass detects and reports. If it happens, use `$active` or vary the getter name via an option                                                                           |
 | Performance: `fromJson` switch gets an extra `vault._active = ...` per case | Trivial — one pointer per parse, O(1), doesn't affect hot paths                                                                                                            |
 | `separate_models: true` enabled in the future                               | Out of scope. The generator would emit a sealed class with subtypes in other files → compile error. Follow-up: detect the flag and fall back to `abstract interface class` |

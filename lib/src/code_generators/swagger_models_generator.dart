@@ -1653,9 +1653,25 @@ $getters
     return '\n${lines.join('\n')}\n';
   }
 
+  /// One entry per discriminator value of a oneOf wrapper, in mapping order.
+  List<({String key, String ref, String field})> _variantFields(
+          SwaggerSchema schema) =>
+      [
+        for (final entry
+            in schema.discriminator?.mapping.entries ?? <MapEntry<String, String>>[])
+          (
+            key: entry.key,
+            ref: entry.value,
+            field: entry.key == 'dynamic' ? 'dynamicField' : entry.key.camelCase,
+          ),
+      ];
+
+  String _generateErrorReport(String validatedClassName, [String context = '']) =>
+      'SwaggerReporterHelper.report(\'GenerateError in $validatedClassName$context \${ex.toString()}\');';
+
   String generatedFromJson(SwaggerSchema schema, String validatedClassName) {
     final hasMapping = schema.discriminator?.mapping.isNotEmpty ?? false;
-    final reporterCode = '\t\tSwaggerReporterHelper.report(\'GenerateError in $validatedClassName \${ex.toString()}\');\n';
+    final reporterCode = '\t\t${_generateErrorReport(validatedClassName)}\n';
     if (hasMapping) {
       final discriminator = schema.discriminator!;
       final propertyName = discriminator.propertyName;
@@ -1666,26 +1682,32 @@ $getters
       // without re-scanning the 15 nullable fields on every read.
       final hasInterface = _oneOfWrappers.containsKey(validatedClassName);
 
-      String fieldNameFor(MapEntry<String, String> entry) =>
-          entry.key == 'dynamic' ? 'dynamicField' : entry.key.camelCase;
+      final variants = _variantFields(schema);
+      final keepPayload =
+          '$responseVar._undecodedJson = Map<String, dynamic>.unmodifiable(json);';
 
       // A variant that fails to decode keeps the raw payload, like an unknown
       // discriminator, so `toJson` can write it back instead of `{}`.
-      String caseBody(MapEntry<String, String> entry) {
-        final field = fieldNameFor(entry);
+      String caseBody(({String key, String ref, String field}) v) {
         final assign =
-            '$responseVar.$field = _\$${entry.value.split('/').last.pascalCase}FromJson(json);';
-        final activeAssign =
-            hasInterface ? ' $responseVar._active = $responseVar.$field;' : '';
-        return 'case \'${entry.key}\': try { $assign$activeAssign } catch(ex) {'
-            ' $responseVar._undecodedJson = json;'
-            ' SwaggerReporterHelper.report(\'GenerateError in $validatedClassName'
-            ' ($propertyName=${entry.key}) \${ex.toString()}\'); } break;';
+            '$responseVar.${v.field} = _\$${v.ref.split('/').last.pascalCase}FromJson(json);';
+        final activeAssign = hasInterface
+            ? ' $responseVar._active = $responseVar.${v.field};'
+            : '';
+        return 'case \'${v.key}\': try { $assign$activeAssign } catch(ex) {'
+            ' $keepPayload'
+            ' ${_generateErrorReport(validatedClassName, ' ($propertyName=${v.key})')} } break;';
       }
 
-      final defaultCase = 'default: $responseVar._undecodedJson = json;'
+      // Reported once per value per process: an unknown value usually means
+      // the backend shipped a new variant, and every list decode would repeat it.
+      final defaultCase = 'default: $keepPayload'
+          ' if (_reportedUnknownValues.add(json[\'$propertyName\']))'
           ' SwaggerReporterHelper.report(\'Unknown $validatedClassName'
           ' $propertyName=\${json[\'$propertyName\']}\');';
+
+      final noVariantSet =
+          variants.map((v) => '${v.field} == null').join(' && ');
 
       return 'static $validatedClassName _\$${validatedClassName}FromJson(Map<String, dynamic> json) { '
           '\ttry { '
@@ -1695,18 +1717,17 @@ $getters
           '\t\trethrow;'
           '}'
           '}\n\n'
-          '${discriminator.mapping.entries.map((entry) => '${entry.value.getRef()}? ${fieldNameFor(entry)};').join('\n')}'
+          '${variants.map((v) => '${v.ref.getRef()}? ${v.field};').join('\n')}'
           '\n\n'
+          'static final Set<Object?> _reportedUnknownValues = {};\n\n'
           'Map<String, dynamic>? _undecodedJson;\n\n'
-          '/// The raw payload when it matched no variant or its variant failed to\n'
-          '/// decode; null when a variant decoded.\n'
-          'Map<String, dynamic>? get undecodedJson => _undecodedJson;\n\n'
-          '/// The `$propertyName` value of [undecodedJson].\n'
-          'String? get undecodedDiscriminator => _undecodedJson?[\'$propertyName\']?.toString();\n\n'
+          '/// The payload `fromJson` could not decode: its `$propertyName` matched no\n'
+          '/// variant, or the matching variant failed to parse. Null once a variant is set.\n'
+          'Map<String, dynamic>? get undecodedJson => $noVariantSet ? _undecodedJson : null;\n\n'
           'factory $validatedClassName.fromJson(Map<String, dynamic> json) {'
           '\t\tvar $responseVar = $validatedClassName();'
           '\t\tswitch (json[\'$propertyName\']) {'
-          '\t\t\t${discriminator.mapping.entries.map(caseBody).join('\n')}'
+          '\t\t\t${variants.map(caseBody).join('\n')}'
           '\t\t\t$defaultCase'
           '\t\t}'
           '\treturn $responseVar;'
@@ -1725,15 +1746,16 @@ $getters
   String generateToJson(SwaggerSchema schema, String validatedClassName) {
     final hasMapping = schema.discriminator?.mapping.isNotEmpty ?? false;
     if (hasMapping) {
-      final variantReturns = schema.discriminator!.mapping.entries.map((entry) {
-        final field =
-            entry.key == 'dynamic' ? 'dynamicField' : entry.key.camelCase;
-        return '\n\tif ($field != null) return $field!.toJson();';
-      }).join();
+      final variantReturns = _variantFields(schema)
+          .map((v) => '\n\tif (${v.field} != null) return ${v.field}!.toJson();')
+          .join();
       return 'static Map<String, dynamic> _\$${validatedClassName}ToJson($validatedClassName instance) { return Map<String, dynamic>();}\n\n'
+          '/// Serializes the variant that is set (the first in mapping order if\n'
+          '/// several are), else a copy of [undecodedJson].\n'
           'Map<String, dynamic> toJson() {'
           '$variantReturns'
-          '\n\treturn _undecodedJson ?? _\$${validatedClassName}ToJson(this);'
+          '\n\tfinal undecoded = undecodedJson;'
+          '\n\treturn undecoded != null ? Map<String, dynamic>.of(undecoded) : _\$${validatedClassName}ToJson(this);'
           '\n}';
     }
     return 'Map<String, dynamic> toJson() => _\$${validatedClassName}ToJson(this);';
