@@ -66,8 +66,11 @@ SwaggerModelsGenerator _gen({bool overrideEquals = false}) =>
       overrideEqualsAndHashcode: overrideEquals,
     ));
 
-String _runGenerate(Map<String, SwaggerSchema> schemas) {
-  final generator = _gen();
+String _runGenerate(
+  Map<String, SwaggerSchema> schemas, {
+  bool overrideEquals = false,
+}) {
+  final generator = _gen(overrideEquals: overrideEquals);
   return generator.generateBase(
     root: _root(schemas),
     fileName: 'test',
@@ -483,6 +486,64 @@ void main() {
           contains('return undecoded != null'
               ' ? Map<String, dynamic>.of(undecoded) : _\$W3ToJson(this);'));
       expect(wrapper, isNot(contains('..addAll(')));
+    });
+  });
+
+  group('value equality', () {
+    final schemas = <String, SwaggerSchema>{
+      'Aa': _objectWithProps({'id': _string(), 'tags': _ref('Bb')}),
+      'Bb': _objectWithProps({'id': _string()}),
+      'W4': _wrapper(
+        propertyName: 'kind',
+        mapping: {
+          'a': '#/components/schemas/Aa',
+          'b': '#/components/schemas/Bb',
+        },
+      ),
+    };
+
+    String fieldCheck(String f) =>
+        '(identical(other.$f, $f) ||\n                const DeepCollectionEquality().equals(other.$f, $f))';
+
+    test('a plain model compares, hashes and copies every field', () {
+      final out = _runGenerate(schemas, overrideEquals: true);
+      final model = _extractClass(out, 'Aa');
+
+      expect(model, contains('other is Aa &&'));
+      expect(model, contains(fieldCheck('id')));
+      expect(model, contains(fieldCheck('tags')));
+      expect(
+          model,
+          contains('int get hashCode => Object.hashAll([\nruntimeType,\n'
+              'const DeepCollectionEquality().hash(id),\n'
+              'const DeepCollectionEquality().hash(tags),\n]);'));
+      expect(
+          out,
+          contains(
+              'extension \$AaExtension on Aa { Aa copyWith({String? id, Bb? tags})'));
+      expect(out,
+          contains('Aa copyWithWrapped({Wrapped<String?>? id, Wrapped<Bb?>? tags})'));
+    });
+
+    test('a wrapper compares its variants and undecoded payload, without copyWith',
+        () {
+      final out = _runGenerate(schemas, overrideEquals: true);
+      final wrapper = _extractClass(out, 'W4');
+
+      expect(wrapper, contains('other is W4 &&'));
+      expect(wrapper, contains(fieldCheck('a')));
+      expect(wrapper, contains(fieldCheck('b')));
+      expect(wrapper, contains(fieldCheck('_undecodedJson')));
+      expect(wrapper, isNot(contains(fieldCheck('_active'))));
+      expect(wrapper, contains('const DeepCollectionEquality().hash(_undecodedJson)'));
+      expect(out, isNot(contains('W4Extension')));
+    });
+
+    test('overrideEqualsAndHashcode false keeps identity equality', () {
+      final model = _extractClass(_runGenerate(schemas), 'Aa');
+
+      expect(model, isNot(contains('operator ==')));
+      expect(model, isNot(contains('hashCode')));
     });
   });
 }

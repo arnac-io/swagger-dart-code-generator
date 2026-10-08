@@ -549,44 +549,29 @@ void main() {
   });
 
   group('generateEqualsOverride', () {
-    test(
-        "Should not return generated equals due to overrideEqualsAndHashcode set to false",
-        () {
-      const className = 'Animals';
+    const fields = [(type: 'String', name: 'foo')];
+
+    test('is empty when overrideEqualsAndHashcode is false', () {
       final result = generator3.generateEqualsOverride(
-        "final String foo;",
-        className,
+        fields,
+        'Animals',
         generator3.options,
       );
 
       expect(result, isEmpty);
     });
 
-    test("Should not return generated equals due to empty properties", () {
-      const className = 'Animals';
-      final result = generator3.generateEqualsOverride(
-        "",
-        className,
-        generator3.options,
+    test('is empty for a class without fields', () {
+      final result = generator.generateEqualsOverride(
+        [],
+        'Animals',
+        generator.options,
       );
 
       expect(result, isEmpty);
     });
 
-    test("Should not return generated equals due to non-formatted properties",
-        () {
-      const className = 'Animals';
-      final result = generator3.generateEqualsOverride(
-        "not_a_property",
-        className,
-        generator3.options,
-      );
-
-      expect(result, isEmpty);
-    });
-
-    test("Should return generated equals", () {
-      const className = 'Animals';
+    test('compares every field', () {
       final expected = '''
 @override
   bool operator ==(Object other) {
@@ -598,13 +583,46 @@ void main() {
   }
     ''';
       final result = generator.generateEqualsOverride(
-        "final String foo;",
-        className,
+        fields,
+        'Animals',
         generator.options,
       );
 
       expect(result, expected);
     });
+  });
+
+  group('parseFieldDeclaration', () {
+    final cases = <(String, String, ({String type, String name})?)>[
+      ('plain', "\t@JsonKey(name: 'id')\n\t String id;", (type: 'String', name: 'id')),
+      (
+        'generic type with a space',
+        "@JsonKey(name: 'meta', includeIfNull: false)\n\tMap<String, Object>? meta;",
+        (type: 'Map<String, Object>?', name: 'meta'),
+      ),
+      (
+        'deprecated, default list value',
+        "\t@JsonKey(name: 'ids', defaultValue: <Ref>[])\n@deprecated\tList<Ref> ids;",
+        (type: 'List<Ref>', name: 'ids'),
+      ),
+      (
+        'converter and parens inside a quoted key',
+        "\t@_\$UuidJsonConverter()@JsonKey(name: 'a(b);') Uuid? id;",
+        (type: 'Uuid?', name: 'id'),
+      ),
+      (
+        'enum with a trailing default-value helper',
+        "@JsonKey(name: 'kind', fromJson: kindFromJson)\n enums.Kind kind;\n\nstatic enums.Kind kindFromJson(Object? value) => x(value);",
+        (type: 'enums.Kind', name: 'kind'),
+      ),
+      ('ignored key', '', null),
+    ];
+
+    for (final (name, content, expected) in cases) {
+      test(name, () {
+        expect(generator.parseFieldDeclaration(content), expected);
+      });
+    }
   });
 
   group('Tests for getValidatedClassName', () {

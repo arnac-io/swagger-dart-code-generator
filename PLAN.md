@@ -25,7 +25,7 @@
 | 6   | Lax intersection (props present in ≥ 80% of subtypes)               | Yes. Missing subtypes get a `@override T? get foo => null;` stub                                 |
 | 7   | Expose the discriminator as a string on the wrapper                 | **No**. Pattern matching IS the discriminator                                                    |
 | 8   | `_active` cached or computed                                        | **Cached** (field set in `fromJson`, not recomputed on access)                                   |
-| 9   | `_active` must stay out of `==`/`hashCode`/`copyWith`/`toJson`      | Yes (the existing regex filters it because it isn't `final`)                                     |
+| 9   | `_active` must stay out of `==`/`hashCode`/`copyWith`/`toJson`      | Yes. Wrapper equality compares the variant fields and `_undecodedJson`; `_active` is derived from them |
 | 10  | Support for `separate_models: true`                                 | Out of scope. If enabled, fall back to `abstract interface class`. Follow-up.                    |
 | 11  | Emit an `UnknownVault` placeholder for unknown discriminator values | Out of scope. `vault.active` stays `null` if no case matches. Follow-up if a real need shows up. |
 | 12  | Payload that matches no variant, or whose variant fails to parse    | Kept and exposed as `undecodedJson` (null once a variant is set); `toJson` writes a copy back. Reported once per unknown value per process. No string discriminator getter (see 7) |
