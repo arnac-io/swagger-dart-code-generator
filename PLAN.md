@@ -24,8 +24,8 @@
 | 5   | Class modifier of the interface                                     | `sealed class` (enables exhaustive pattern matching + `_`/`default:` for forward-compat)         |
 | 6   | Lax intersection (props present in ≥ 80% of subtypes)               | Yes. Missing subtypes get a `@override T? get foo => null;` stub                                 |
 | 7   | Expose the discriminator as a string on the wrapper                 | **No**. Pattern matching IS the discriminator                                                    |
-| 8   | `_active` cached or computed                                        | **Cached** (field set in `fromJson`, not recomputed on access)                                   |
-| 9   | `_active` must stay out of `==`/`hashCode`/`copyWith`/`toJson`      | Yes. Wrapper equality compares the variant fields and `undecodedJson`; `_active` is derived from them |
+| 8   | `active` cached or computed                                         | **Computed**: the first non-null variant field, so setter-built wrappers and a reassigned variant stay correct. Switching variants means nulling the old one |
+| 9   | `active` must stay out of `==`/`hashCode`/`copyWith`/`toJson`       | Yes. Wrapper equality compares the variant fields and `undecodedJson`; `active` is derived from them |
 | 10  | Support for `separate_models: true`                                 | Out of scope. If enabled, fall back to `abstract interface class`. Follow-up.                    |
 | 11  | Emit an `UnknownVault` placeholder for unknown discriminator values | Out of scope. `vault.active` stays `null` if no case matches. Follow-up if a real need shows up. |
 | 12  | Payload that matches no variant, or whose variant fails to parse    | Kept and exposed as `undecodedJson` (null once a variant is set); `toJson` writes a copy back. Reported once per unknown value per process. No string discriminator getter (see 7) |
@@ -109,16 +109,18 @@ Implementation outline:
 6. **Changes to `generateModelClassString`**:
    - If wrapper (in `_oneOfWrappers`):
      - Prepend `_generateSealedInterface(info)` to the output
-     - Modify the class body to add an `IXxx? _active;` private field +
-       `IXxx? get active => _active;` public getter
+     - Modify the class body to add an `IXxx? get active` getter returning the
+       first non-null variant field
    - If subtype (in `_oneOfSubtypes`):
      - Change the header `class X {` → `class X implements IY {`
      - Append `@override T? get foo => null;` for each `missingProp` before the
        final `}`
 
-7. **Change to `generatedFromJson`** (only when `hasMapping`):
-   - Each switch case appends `<varName>._active = <varName>.<subfield>;` after
-     parsing the subtype
+7. **Per-variant factories** (every wrapper with a mapping):
+   - `factory Wrapper.<variant>(Variant value) => Wrapper()..<variant> = value;`
+   - Skipped for a class mapped from several discriminator values: the payload
+     carries its own discriminator, so a per-value factory could claim a value
+     it doesn't have.
 
 ### Phase 2 — Generator unit tests
 
@@ -396,7 +398,7 @@ I'll stop and check in at these moments:
 | Bug in signature comparison across subtypes → mistyped IXxx                 | Unit tests covering refs, primitives with format, arrays                                                                                                                   |
 | Huge `bff_openapi.swagger.dart` diff alarms the manager                     | Interface generation alone is additive (`grep '^-[^-]'`); decision 12+ rewrite wrapper `fromJson`/`toJson` and add `==`/`hashCode`/`copyWith` to every model (BFF client 255k → ~380k lines). If needed, a selective mode (only Vault/Chain/Address/AssetIdentifier) via `build.yaml` |
 | Name collision (subtype with a field named `active`)                        | Pre-pass detects and reports. If it happens, use `$active` or vary the getter name via an option                                                                           |
-| Performance: `fromJson` switch gets an extra `vault._active = ...` per case | Trivial — one pointer per parse, O(1), doesn't affect hot paths                                                                                                            |
+| Performance: `active` checks up to N variant fields per read                | Trivial — N null checks (≤ ~25), no allocation                                                                                                                             |
 | `separate_models: true` enabled in the future                               | Out of scope. The generator would emit a sealed class with subtypes in other files → compile error. Follow-up: detect the flag and fall back to `abstract interface class` |
 | BE adds a new chain and a `_`-less switch breaks the mobile build           | **Desired behavior** of sealed types: it warns you to handle it. If you want graceful, write `_ => ...` in the switch from day one                                         |
 
