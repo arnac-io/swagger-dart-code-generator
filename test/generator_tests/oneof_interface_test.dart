@@ -425,6 +425,57 @@ void main() {
       expect(wrapperRegion, contains('IW2? get active => _active;'));
     });
   });
+
+  group('undecoded payloads', () {
+    final schemas = <String, SwaggerSchema>{
+      'Aa': _objectWithProps({'id': _string()}),
+      'Bb': _objectWithProps({'id': _string()}),
+      'W3': _wrapper(
+        propertyName: 'kind',
+        mapping: {
+          'a': '#/components/schemas/Aa',
+          'b': '#/components/schemas/Bb',
+        },
+      ),
+    };
+
+    test('an unknown discriminator keeps the payload and is reported', () {
+      final wrapper = _extractClass(_runGenerate(schemas), 'W3');
+
+      expect(wrapper, contains('Map<String, dynamic>? _undecodedJson;'));
+      expect(wrapper,
+          contains('Map<String, dynamic>? get undecodedJson => _undecodedJson;'));
+      expect(
+          wrapper,
+          contains(
+              "String? get undecodedDiscriminator => _undecodedJson?['kind']?.toString();"));
+      expect(wrapper, contains('default: w3._undecodedJson = json;'));
+      expect(wrapper,
+          contains("SwaggerReporterHelper.report('Unknown W3 kind=\${json['kind']}');"));
+    });
+
+    test('a variant that fails to decode keeps the payload and names the case',
+        () {
+      final wrapper = _extractClass(_runGenerate(schemas), 'W3');
+
+      expect(
+          wrapper,
+          contains("case 'a': try { w3.a = _\$AaFromJson(json); w3._active = w3.a; } catch(ex) {"
+              " w3._undecodedJson = json;"
+              " SwaggerReporterHelper.report('GenerateError in W3 (kind=a) \${ex.toString()}'); } break;"));
+    });
+
+    test('toJson writes one variant, else the undecoded payload, never a merge',
+        () {
+      final wrapper = _extractClass(_runGenerate(schemas), 'W3');
+
+      expect(wrapper, contains('if (a != null) return a!.toJson();'));
+      expect(wrapper, contains('if (b != null) return b!.toJson();'));
+      expect(wrapper,
+          contains('return _undecodedJson ?? _\$W3ToJson(this);'));
+      expect(wrapper, isNot(contains('..addAll(')));
+    });
+  });
 }
 
 // ─── helpers ────────────────────────────────────────────────────────────────
