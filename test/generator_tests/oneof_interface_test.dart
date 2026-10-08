@@ -1,7 +1,7 @@
 // Tests for the `oneOf` + `discriminator` interface generation:
 //   • `sealed class IXxx` emission alongside the wrapper class
 //   • `implements IXxx` injection on each subtype
-//   • `_active` field + `active` getter on the wrapper
+//   • computed `active` getter and per-variant factories on the wrapper
 //   • `@override T? get foo => null;` stubs in subtypes missing a lax-common prop
 //   • Transitive type unification (one wrapper's subtype implementing another wrapper's interface)
 //   • Edge cases: 1-subtype wrapper, 0-common-prop wrapper, enum-divergence rejection
@@ -96,7 +96,7 @@ String _runGenerate(
 
 void main() {
   group('strict intersection', () {
-    test('emits sealed IXxx, implements on subtypes, _active in wrapper', () {
+    test('emits sealed IXxx, implements on subtypes, active in wrapper', () {
       final schemas = <String, SwaggerSchema>{
         'EvmFoo': _objectWithProps({
           'id': _string(),
@@ -131,14 +131,15 @@ void main() {
       expect(out, contains('class EvmFoo implements IFoo{'));
       expect(out, contains('class SolanaFoo implements IFoo{'));
 
-      // Wrapper exposes `_active` field + `active` getter.
-      expect(out, contains('IFoo? _active;'));
-      expect(out, contains('IFoo? get active => _active;'));
-
-      // fromJson switch sets _active for each case.
-      expect(out, contains("case 'evm':"));
-      expect(out, contains('foo._active = foo.evm;'));
-      expect(out, contains('foo._active = foo.solana;'));
+      // Wrapper exposes `active`, computed from the variant fields.
+      expect(
+          out,
+          contains('IFoo? get active {\n'
+              '\t\tif (evm != null) return evm;\n'
+              '\t\tif (solana != null) return solana;\n'
+              '\t\treturn null;\n'
+              '\t}'));
+      expect(out, isNot(contains('_active')));
     });
   });
 
@@ -254,7 +255,7 @@ void main() {
       };
       final out = _runGenerate(schemas);
       expect(out, isNot(contains('sealed class IWrap')));
-      expect(out, isNot(contains('IWrap? _active;')));
+      expect(out, isNot(contains('IWrap? get active')));
       // Subtype is not decorated.
       expect(out, contains('class Only{'));
       expect(out, isNot(contains('class Only implements')));
@@ -278,7 +279,8 @@ void main() {
       };
       final out = _runGenerate(schemas);
       expect(out, isNot(contains('sealed class IX ')));
-      expect(out, isNot(contains('IX? _active;')));
+      expect(out, isNot(contains('IX? get active')));
+      expect(out, contains('factory X.one(X1 value) => X()..one = value;'));
     });
 
     test('property with divergent enum refs per subtype is rejected', () {
@@ -381,6 +383,29 @@ void main() {
               'class PayloadA implements IDualKeyWrap, IDualKeyWrap')));
     });
 
+    test('a class shared by several discriminator values gets no per-value factory',
+        () {
+      final schemas = <String, SwaggerSchema>{
+        'PayloadA': _objectWithProps({'id': _string()}),
+        'PayloadB': _objectWithProps({'id': _string()}),
+        'DualKeyWrap': _wrapper(
+          propertyName: 'op',
+          mapping: {
+            'eq': '#/components/schemas/PayloadA',
+            'neq': '#/components/schemas/PayloadA',
+            'gt': '#/components/schemas/PayloadB',
+          },
+        ),
+      };
+      final wrapper = _extractClass(_runGenerate(schemas), 'DualKeyWrap');
+
+      expect(wrapper, contains('factory DualKeyWrap.gt(PayloadB value)'));
+      expect(wrapper, isNot(contains('factory DualKeyWrap.eq(')));
+      expect(wrapper, isNot(contains('factory DualKeyWrap.neq(')));
+      expect(wrapper, contains('if (eq != null) return eq;'));
+      expect(wrapper, contains('if (neq != null) return neq;'));
+    });
+
     test('properties listed in options.ignoredKeys are skipped from the interface',
         () {
       final schemas = <String, SwaggerSchema>{
@@ -422,7 +447,8 @@ void main() {
   });
 
   group('wrapper extras placement', () {
-    test('_active field and active getter live inside the wrapper class', () {
+    test('active getter and variant factories live inside the wrapper class',
+        () {
       final schemas = <String, SwaggerSchema>{
         'Aa': _objectWithProps({'id': _string()}),
         'Bb': _objectWithProps({'id': _string()}),
@@ -436,8 +462,9 @@ void main() {
       };
       final out = _runGenerate(schemas);
       final wrapperRegion = _extractClass(out, 'W2');
-      expect(wrapperRegion, contains('IW2? _active;'));
-      expect(wrapperRegion, contains('IW2? get active => _active;'));
+      expect(wrapperRegion, contains('IW2? get active {'));
+      expect(wrapperRegion, contains('factory W2.a(Aa value) => W2()..a = value;'));
+      expect(wrapperRegion, contains('factory W2.b(Bb value) => W2()..b = value;'));
     });
   });
 
@@ -482,7 +509,7 @@ void main() {
 
       expect(
           wrapper,
-          contains("case 'a': try { w3.a = _\$AaFromJson(json); w3._active = w3.a; } catch(ex) {"
+          contains("case 'a': try { w3.a = _\$AaFromJson(json); } catch(ex) {"
               " w3._undecodedJson = Map<String, dynamic>.unmodifiable(json);"
               " SwaggerReporterHelper.report('GenerateError in W3 (kind=a) \${ex.toString()}'); } break;"));
     });

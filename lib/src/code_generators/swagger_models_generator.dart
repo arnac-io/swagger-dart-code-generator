@@ -1653,9 +1653,10 @@ String toString() => jsonEncode(this);
 
     final createToJson = generateCreateToJson(schema, validatedClassName);
 
-    // ── oneOf-interface decorations ─────────────────────────────────────────
-    // For wrappers: prepend `sealed class I<wrapperName> { ... }`, inject a
-    // private `_active` field + public `active` getter inside the wrapper.
+    // ── oneOf decorations ───────────────────────────────────────────────────
+    // For wrappers: prepend `sealed class I<wrapperName> { ... }` and inject a
+    // computed `active` getter when an interface exists, plus per-variant
+    // factories for every wrapper.
     // For subtypes: append `implements IFoo[, IBar]` to the class header and
     // emit `@override T? get foo => null;` stubs for missing common props.
     final oneOfWrapperInfo = _oneOfWrappers[validatedClassName];
@@ -1665,9 +1666,12 @@ String toString() => jsonEncode(this);
         ? ''
         : _generateSealedInterfaceBlock(oneOfWrapperInfo);
 
-    final oneOfWrapperExtras = oneOfWrapperInfo == null
-        ? ''
-        : _generateWrapperActiveMembers(oneOfWrapperInfo);
+    final wrapperExtras = [
+      if (oneOfWrapperInfo != null)
+        _generateWrapperActiveGetter(
+            oneOfWrapperInfo, variants.map((v) => v.field)),
+      _generateVariantFactories(validatedClassName, variants),
+    ].join();
 
     // A subtype can appear in the same wrapper's mapping under multiple
     // discriminator values (e.g. `equal` and `not_equal` both point to the
@@ -1690,7 +1694,7 @@ class $validatedClassName$oneOfImplementsClause{
 \t$toJson${hasMapping ? '' : ''}\n
 $generatedProperties
 \tstatic const fromJsonFactory = _\$${validatedClassName}FromJson;
-$oneOfWrapperExtras$oneOfSubtypeStubs
+$wrapperExtras$oneOfSubtypeStubs
 $equalsOverride
 
 $toStringOverride
@@ -1719,11 +1723,36 @@ $getters
 ''';
   }
 
-  /// Emits the `_active` private field and public `active` getter that the
-  /// wrapper class exposes. Called inside the wrapper class body.
-  String _generateWrapperActiveMembers(OneOfInterfaceInfo info) {
-    return '\n\t${info.interfaceName}? _active;\n'
-        '\t${info.interfaceName}? get active => _active;\n';
+  /// Emits the wrapper's `active` getter: the first non-null variant field.
+  String _generateWrapperActiveGetter(
+    OneOfInterfaceInfo info,
+    Iterable<String> variantFields,
+  ) {
+    // An if-chain rather than `a ?? b ?? …`: the least upper bound of two
+    // variants that share several interfaces can be `Object`, not the IXxx.
+    final checks =
+        variantFields.map((f) => '\t\tif ($f != null) return $f;\n').join();
+    return '\n\t${info.interfaceName}? get active {\n$checks\t\treturn null;\n\t}\n';
+  }
+
+  /// Emits one `factory Wrapper.<variant field>(Variant value)` per variant
+  /// class used by a single discriminator value, so a wrapper can be built
+  /// without a JSON round-trip.
+  String _generateVariantFactories(
+    String validatedClassName,
+    List<({String key, String ref, String field})> variants,
+  ) {
+    final keysPerRef = <String, int>{};
+    for (final v in variants) {
+      keysPerRef[v.ref] = (keysPerRef[v.ref] ?? 0) + 1;
+    }
+    // A class shared by several values carries its own discriminator, so a
+    // per-value factory would claim a value the payload may not have.
+    return variants
+        .where((v) => keysPerRef[v.ref] == 1)
+        .map((v) =>
+            '\n\tfactory $validatedClassName.${v.field}(${v.ref.getRef()} value) => $validatedClassName()..${v.field} = value;')
+        .join();
   }
 
   /// Emits `@override T? get foo => null;` stubs for properties that some
@@ -1767,11 +1796,6 @@ $getters
       final propertyName = discriminator.propertyName;
       final responseVar = validatedClassName.camelCase;
 
-      // If this wrapper produces an IXxx interface, each case must also
-      // populate the wrapper's `_active` field so callers get O(1) access
-      // without re-scanning the 15 nullable fields on every read.
-      final hasInterface = _oneOfWrappers.containsKey(validatedClassName);
-
       final variants = _variantFields(schema);
       final keepPayload =
           '$responseVar._undecodedJson = Map<String, dynamic>.unmodifiable(json);';
@@ -1781,10 +1805,7 @@ $getters
       String caseBody(({String key, String ref, String field}) v) {
         final assign =
             '$responseVar.${v.field} = _\$${v.ref.split('/').last.pascalCase}FromJson(json);';
-        final activeAssign = hasInterface
-            ? ' $responseVar._active = $responseVar.${v.field};'
-            : '';
-        return 'case \'${v.key}\': try { $assign$activeAssign } catch(ex) {'
+        return 'case \'${v.key}\': try { $assign } catch(ex) {'
             ' $keepPayload'
             ' ${_generateErrorReport(validatedClassName, ' ($propertyName=${v.key})')} } break;';
       }
@@ -2079,7 +2100,7 @@ int get hashCode => $hash;
   // The results populate [_oneOfWrappers] and [_oneOfSubtypes]; the emission
   // code in [generateModelClassString] then consults these maps to:
   //   - prepend a `sealed class I<wrapperName>` ahead of each wrapper class
-  //   - inject `IXxx? _active;` field + `active` getter into the wrapper
+  //   - inject a computed `active` getter into the wrapper
   //   - add `implements IXxx` to subtype class headers
   //   - emit `@override T? get foo => null;` stubs in subtypes lacking a
   //     property that's part of the lax intersection
