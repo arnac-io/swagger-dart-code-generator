@@ -83,6 +83,14 @@ class SwaggerCodeGenerator {
         allEnums: allEnums,
       );
 
+  String generateEnumHelpers(
+    List<EnumModel> allEnums,
+    GeneratorOptions options, {
+    required String referencedBy,
+  }) =>
+      EnumModel.referencedHelpers(
+          allEnums, referencedBy, options.enumsCaseSensitive);
+
   String generateRequests(
     SwaggerRoot root,
     String className,

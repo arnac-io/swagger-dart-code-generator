@@ -18,7 +18,6 @@ class SwaggerModelsGeneratorV2 extends SwaggerModelsGenerator {
       root: root,
       fileName: fileName,
       classes: definitions,
-      generateEnumsMethods: true,
       allEnums: allEnums,
     );
   }

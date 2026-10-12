@@ -29,7 +29,7 @@
 | 10  | Support for `separate_models: true`                                 | Out of scope. If enabled, fall back to `abstract interface class`. Follow-up.                    |
 | 11  | Emit an `UnknownVault` placeholder for unknown discriminator values | Out of scope. `vault.active` stays `null` if no case matches. Follow-up if a real need shows up. |
 | 12  | Payload that matches no variant, or whose variant fails to parse    | Kept and exposed as `undecodedJson` (null once a variant is set); `toJson` writes a copy back. Reported once per unknown value per process. No string discriminator getter (see 7) |
-| 13  | Model `==`/`hashCode`/`copyWith`                                    | Value equality over all fields (deep only for collections); wrappers compare variants + `undecodedJson` and get no `copyWith`. Fields stay mutable: don't mutate a hashed model. `generate_copy_with: false` drops `copyWith` (~+1.6 MB on the BFF client) |
+| 13  | Model `==`/`hashCode`/`copyWith`                                    | Value equality over all fields (deep only for collections); wrappers compare variants + `undecodedJson` and get no `copyWith`. Fields stay mutable: don't mutate a hashed model. `generate_copy_with: false` drops `copyWith` (~2.3 MB on the BFF client) |
 
 ---
 

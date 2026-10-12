@@ -69,4 +69,26 @@ void main() {
       expect(result.name, equals('Original parameter'));
     });
   });
+
+  group('referenced enum helpers', () {
+    const color = EnumModel(
+        name: 'Color', values: ['red'], isInteger: false, enumNames: []);
+    const size = EnumModel(
+        name: 'Size', values: ['s'], isInteger: false, enumNames: []);
+
+    List<String> emitted(String code) => RegExp(r'^\S.* (\w+)\(', multiLine: true)
+        .allMatches(EnumModel.referencedHelpers([color, size], code))
+        .map((m) => m.group(1)!)
+        .toList();
+
+    test('emits only the helpers the code calls, plus the helpers they call',
+        () {
+      expect(emitted('toJson: colorListToJson, fromJson: colorListFromJson'),
+          ['colorFromJson', 'colorListToJson', 'colorListFromJson']);
+    });
+
+    test('emits nothing for code that calls no helper', () {
+      expect(emitted('class Foo {}'), isEmpty);
+    });
+  });
 }

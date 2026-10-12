@@ -283,14 +283,8 @@ abstract class SwaggerModelsGenerator extends SwaggerGeneratorBase {
     required String fileName,
     required Map<String, SwaggerSchema> classes,
     required List<EnumModel> allEnums,
-    required bool generateEnumsMethods,
   }) {
     final converters = generateJsonConverters();
-    final allEnumsString = generateEnumsMethods
-        ? allEnums
-            .map((e) => e.generateFromJsonToJson(options.enumsCaseSensitive))
-            .join()
-        : '';
 
     final allEnumListNames = getAllListEnumNames(root);
 
@@ -302,7 +296,7 @@ abstract class SwaggerModelsGenerator extends SwaggerGeneratorBase {
     classes.addAll(classesFromInnerClasses);
 
     if (classes.isEmpty) {
-      return allEnumsString;
+      return '';
     }
 
     // Analyze `oneOf` + `discriminator` wrappers up front so
@@ -336,7 +330,7 @@ abstract class SwaggerModelsGenerator extends SwaggerGeneratorBase {
       results = results.replaceAll(' $listEnum ', ' List<$listEnum> ');
     }
 
-    return converters + results + allEnumsString;
+    return converters + results;
   }
 
   static String getValidatedParameterName(String parameterName) {
@@ -1651,7 +1645,11 @@ String toString() => jsonEncode(this);
 
     final toJson = generateToJson(schema, validatedClassName);
 
-    final createToJson = generateCreateToJson(schema, validatedClassName);
+    // A wrapper defines its own static `_$XFromJson`/`_$XToJson`, so the
+    // json_serializable pair would only be dead code decoding nonsense keys.
+    final createToJson = hasMapping
+        ? ', createFactory: false, createToJson: false'
+        : generateCreateToJson(schema, validatedClassName);
 
     // ── oneOf decorations ───────────────────────────────────────────────────
     // For wrappers: prepend `sealed class I<wrapperName> { ... }` and inject a
@@ -1690,8 +1688,8 @@ $oneOfInterfaceBlock
 @JsonSerializable(explicitToJson: true $createToJson)
 class $validatedClassName$oneOfImplementsClause{
 \t $validatedClassName($generatedConstructorProperties);\n
-\t$fromJson${hasMapping ? '' : ''}\n
-\t$toJson${hasMapping ? '' : ''}\n
+\t$fromJson\n
+\t$toJson\n
 $generatedProperties
 \tstatic const fromJsonFactory = _\$${validatedClassName}FromJson;
 $wrapperExtras$oneOfSubtypeStubs

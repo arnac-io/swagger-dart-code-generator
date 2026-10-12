@@ -199,7 +199,7 @@ class SwaggerDartCodeGenerator implements Builder {
       options: options,
     );
 
-    final models = codeGenerator.generateModels(
+    final modelClasses = codeGenerator.generateModels(
       contents,
       fileWithoutExtension,
       options,
@@ -215,7 +215,7 @@ class SwaggerDartCodeGenerator implements Builder {
 
     final imports = codeGenerator.generateImportsContent(
       fileNameWithoutExtension,
-      models.contains('@JsonSerializable'),
+      modelClasses.contains('@JsonSerializable'),
       options.buildOnlyModels,
       enums.isNotEmpty,
       options.separateModels,
@@ -229,6 +229,10 @@ class SwaggerDartCodeGenerator implements Builder {
       options,
       allEnums
     );
+
+    final models = modelClasses +
+        codeGenerator.generateEnumHelpers(allEnums, options,
+            referencedBy: '$modelClasses\n$requests');
 
     final customDecoder = codeGenerator.generateCustomJsonConverter(
         removeFileExtension(fileNameWithExtension), options);
