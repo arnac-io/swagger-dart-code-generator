@@ -138,6 +138,9 @@ const $name(this.value);
         .join('\n');
   }
 
+  String generateFromJsonToJson([bool caseSensitive = true]) =>
+      generateHelpers(caseSensitive).values.join('\n');
+
   /// The top-level (de)serialization helpers for this enum, keyed by function name.
   Map<String, String> generateHelpers([bool caseSensitive = true]) {
     final type = isInteger ? 'int' : 'String';

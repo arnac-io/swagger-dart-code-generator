@@ -283,8 +283,14 @@ abstract class SwaggerModelsGenerator extends SwaggerGeneratorBase {
     required String fileName,
     required Map<String, SwaggerSchema> classes,
     required List<EnumModel> allEnums,
+    required bool generateEnumsMethods,
   }) {
     final converters = generateJsonConverters();
+    final allEnumsString = generateEnumsMethods
+        ? allEnums
+            .map((e) => e.generateFromJsonToJson(options.enumsCaseSensitive))
+            .join()
+        : '';
 
     final allEnumListNames = getAllListEnumNames(root);
 
@@ -296,7 +302,7 @@ abstract class SwaggerModelsGenerator extends SwaggerGeneratorBase {
     classes.addAll(classesFromInnerClasses);
 
     if (classes.isEmpty) {
-      return '';
+      return allEnumsString;
     }
 
     // Analyze `oneOf` + `discriminator` wrappers up front so
@@ -330,7 +336,7 @@ abstract class SwaggerModelsGenerator extends SwaggerGeneratorBase {
       results = results.replaceAll(' $listEnum ', ' List<$listEnum> ');
     }
 
-    return converters + results;
+    return converters + results + allEnumsString;
   }
 
   static String getValidatedParameterName(String parameterName) {

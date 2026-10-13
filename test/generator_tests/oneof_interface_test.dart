@@ -88,6 +88,7 @@ String _runGenerate(
     fileName: 'test',
     classes: Map.of(schemas),
     allEnums: [],
+    generateEnumsMethods: false,
   );
 }
 
@@ -435,6 +436,7 @@ void main() {
         fileName: 'test',
         classes: Map.of(schemas),
         allEnums: [],
+        generateEnumsMethods: false,
       );
 
       expect(out, contains('sealed class IIgWrap {'));

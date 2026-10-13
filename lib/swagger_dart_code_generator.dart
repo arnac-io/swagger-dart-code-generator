@@ -230,9 +230,12 @@ class SwaggerDartCodeGenerator implements Builder {
       allEnums
     );
 
-    final models = modelClasses +
-        codeGenerator.generateEnumHelpers(allEnums, options,
-            referencedBy: '$modelClasses\n$requests');
+    // Requests call enum-list helpers too, so pruning must run after both are generated.
+    final models = options.generateUnusedEnumHelpers
+        ? modelClasses
+        : modelClasses +
+            codeGenerator.generateReferencedEnumHelpers(allEnums, options,
+                referencedBy: '$modelClasses\n$requests');
 
     final customDecoder = codeGenerator.generateCustomJsonConverter(
         removeFileExtension(fileNameWithExtension), options);
