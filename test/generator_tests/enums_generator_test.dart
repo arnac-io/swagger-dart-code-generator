@@ -1,6 +1,7 @@
 import 'package:swagger_dart_code_generator/src/code_generators/enum_model.dart';
 import 'package:swagger_dart_code_generator/src/code_generators/v3/swagger_enums_generator_v3.dart';
 import 'package:swagger_dart_code_generator/src/models/generator_options.dart';
+import 'package:swagger_dart_code_generator/src/swagger_code_generator.dart';
 import 'package:swagger_dart_code_generator/src/swagger_models/requests/swagger_request_parameter.dart';
 import 'package:test/test.dart';
 
@@ -70,16 +71,25 @@ void main() {
     });
   });
 
-  group('referenced enum helpers', () {
+  group('enum helpers', () {
     const color = EnumModel(
         name: 'Color', values: ['red'], isInteger: false, enumNames: []);
     const size = EnumModel(
         name: 'Size', values: ['s'], isInteger: false, enumNames: []);
 
-    List<String> emitted(String code) => RegExp(r'^\S.* (\w+)\(', multiLine: true)
-        .allMatches(EnumModel.referencedHelpers([color, size], code))
-        .map((m) => m.group(1)!)
-        .toList();
+    List<String> emitted(String code, {bool generateUnused = false}) =>
+        RegExp(r'^\S.* (\w+)\(', multiLine: true)
+            .allMatches(SwaggerCodeGenerator().generateEnumHelpers(
+              [color, size],
+              GeneratorOptions(
+                inputFolder: '',
+                outputFolder: '',
+                generateUnusedEnumHelpers: generateUnused,
+              ),
+              referencedBy: code,
+            ))
+            .map((m) => m.group(1)!)
+            .toList();
 
     test('emits only the helpers the code calls, plus the helpers they call',
         () {
@@ -89,6 +99,12 @@ void main() {
 
     test('emits nothing for code that calls no helper', () {
       expect(emitted('class Foo {}'), isEmpty);
+    });
+
+    test('generateUnusedEnumHelpers emits every helper of every enum', () {
+      final helpers = emitted('class Foo {}', generateUnused: true);
+      expect(helpers, hasLength(16));
+      expect(helpers, containsAll(['colorNullableToJson', 'sizeListFromJson']));
     });
   });
 }
