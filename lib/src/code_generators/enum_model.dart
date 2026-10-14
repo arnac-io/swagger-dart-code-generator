@@ -112,100 +112,139 @@ const $name(this.value);
     return '$result(${isInteger ? fieldValue : '\'${_normalizeJsonKeyString(fieldValue)}\''})';
   }
 
-  String generateFromJsonToJson([bool caseSensitive = true]) {
+  /// The helpers of [enums] that [code] calls, directly or through another helper.
+  static String referencedHelpers(
+    List<EnumModel> enums,
+    String code, [
+    bool caseSensitive = true,
+  ]) {
+    final helpers = {
+      for (final e in enums) ...e.generateHelpers(caseSensitive),
+    };
+    final identifier = RegExp(r'[\w$]+');
+    final used = <String>{};
+    final pending = [code];
+    while (pending.isNotEmpty) {
+      for (final match in identifier.allMatches(pending.removeLast())) {
+        final name = match[0]!;
+        if (helpers.containsKey(name) && used.add(name)) {
+          pending.add(helpers[name]!);
+        }
+      }
+    }
+    return helpers.entries
+        .where((e) => used.contains(e.key))
+        .map((e) => e.value)
+        .join('\n');
+  }
+
+  String generateFromJsonToJson([bool caseSensitive = true]) =>
+      generateHelpers(caseSensitive).values.join('\n');
+
+  /// The top-level (de)serialization helpers for this enum, keyed by function name.
+  Map<String, String> generateHelpers([bool caseSensitive = true]) {
     final type = isInteger ? 'int' : 'String';
+    final n = name.camelCase;
 
     String enumParse(bool nullCheck) => caseSensitive
-        ? 'return enums.$name.values.firstWhereOrNull((e) => e.value == ${name.camelCase}) ?? defaultValue'
-        : 'return enums.$name.values.firstWhereOrNull((e) => e.value.toString().toLowerCase() == ${name.camelCase}${nullCheck ? '?' : ''}.toString().toLowerCase()) ?? defaultValue';
+        ? 'return enums.$name.values.firstWhereOrNull((e) => e.value == $n) ?? defaultValue'
+        : 'return enums.$name.values.firstWhereOrNull((e) => e.value.toString().toLowerCase() == $n${nullCheck ? '?' : ''}.toString().toLowerCase()) ?? defaultValue';
 
-    return '''
-$type? ${name.camelCase}NullableToJson(enums.$name? ${name.camelCase}) {
-  return ${name.camelCase}?.value;
+    return {
+      '${n}NullableToJson': '''
+$type? ${n}NullableToJson(enums.$name? $n) {
+  return $n?.value;
 }
-
-$type? ${name.camelCase}ToJson(enums.$name ${name.camelCase}) {
-  return ${name.camelCase}.value;
+''',
+      '${n}ToJson': '''
+$type? ${n}ToJson(enums.$name $n) {
+  return $n.value;
 }
-
-enums.$name ${name.camelCase}FromJson(
-  Object? ${name.camelCase},
+''',
+      '${n}FromJson': '''
+enums.$name ${n}FromJson(
+  Object? $n,
   [enums.$name? defaultValue,]
   ) {
 
 ${enumParse(true)} ?? enums.$name.swaggerGeneratedUnknown;
 }
-
-enums.$name? ${name.camelCase}NullableFromJson(
-  Object? ${name.camelCase},
+''',
+      '${n}NullableFromJson': '''
+enums.$name? ${n}NullableFromJson(
+  Object? $n,
   [enums.$name? defaultValue,]
   ) {
-    if(${name.camelCase} == null){
+    if($n == null){
       return null;
     }
     ${enumParse(false)};
 }
+''',
+      '${n}ExplodedListToJson': '''
+String ${n}ExplodedListToJson(
+    List<enums.$name>? $n) {
 
-String ${name.camelCase}ExplodedListToJson(
-    List<enums.$name>? ${name.camelCase}) {
-
-    if (${name.camelCase} == null) {
+    if ($n == null) {
       return '';
     }
     String sValues = '';
-    for (final e in ${name.camelCase}!) {
+    for (final e in $n!) {
       if (e.value != null) {
         sValues += e.value!.toString() + ',';
       }
     }
     return sValues;
 }
+''',
+      '${n}ListToJson': '''
+List<$type> ${n}ListToJson(
+    List<enums.$name>? $n) {
 
-List<$type> ${name.camelCase}ListToJson(
-    List<enums.$name>? ${name.camelCase}) {
-
-  if(${name.camelCase} == null)
+  if($n == null)
   {
     return [];
   }
 
   List<$type> listValues = [];
-    for (final e in ${name.camelCase}!) {
+    for (final e in $n!) {
       if (e.value != null) {
         listValues.add(e.value!);
       }
     }
     return listValues;
 }
-
-List<enums.$name> ${name.camelCase}ListFromJson(
-    List? ${name.camelCase},
+''',
+      '${n}ListFromJson': '''
+List<enums.$name> ${n}ListFromJson(
+    List? $n,
     [List<enums.$name>? defaultValue,]) {
 
-  if(${name.camelCase} == null)
+  if($n == null)
   {
     return defaultValue ?? [];
   }
 
-  return ${name.camelCase}
-      .map((e) => ${name.camelCase}FromJson(e.toString()))
+  return $n
+      .map((e) => ${n}FromJson(e.toString()))
       .toList();
 }
-
-
-List<enums.$name>? ${name.camelCase}NullableListFromJson(
-    List? ${name.camelCase},
+''',
+      '${n}NullableListFromJson': '''
+List<enums.$name>? ${n}NullableListFromJson(
+    List? $n,
     [List<enums.$name>? defaultValue,]) {
 
-  if(${name.camelCase} == null)
+  if($n == null)
   {
     return defaultValue;
   }
 
-  return ${name.camelCase}
-      .map((e) => ${name.camelCase}FromJson(e.toString()))
+  return $n
+      .map((e) => ${n}FromJson(e.toString()))
       .toList();
 }
-    ''';
+''',
+    };
   }
 }
