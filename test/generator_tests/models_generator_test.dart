@@ -1,3 +1,4 @@
+import 'package:swagger_dart_code_generator/src/code_generators/swagger_models_generator.dart';
 import 'package:swagger_dart_code_generator/src/code_generators/v2/swagger_models_generator_v2.dart';
 import 'package:swagger_dart_code_generator/src/code_generators/v3/swagger_models_generator_v3.dart';
 import 'package:swagger_dart_code_generator/src/models/generator_options.dart';
@@ -344,7 +345,7 @@ void main() {
     });
   });
 
-  group('generatePropertiesContent', () {
+  group('generatePropertyContents', () {
     test('Should return properties from ref', () {
       final map = {
         'Animals': SwaggerSchema(ref: '#/definitions/Pet'),
@@ -353,7 +354,7 @@ void main() {
       const className = 'Animals';
       const jsonKeyExpectedResult = "\t@JsonKey(name: 'Animals')\n";
       const fieldExpectedResult = 'final Pet? animals';
-      final result = generator.generatePropertiesContent(
+      final result = generator.generatePropertyContents(
         SwaggerRoot.empty,
         map,
         {},
@@ -364,7 +365,7 @@ void main() {
         [],
         [],
         {},
-      );
+      ).join('\n');
 
       expect(result, contains(jsonKeyExpectedResult));
       expect(result, contains(fieldExpectedResult));
@@ -380,7 +381,7 @@ void main() {
       const className = 'Animals';
       const jsonKeyExpectedResult = "\t@JsonKey(name: 'Animals')\n";
       const fieldExpectedResult = 'final Pet animals';
-      final result = generator.generatePropertiesContent(
+      final result = generator.generatePropertyContents(
         SwaggerRoot.empty,
         map,
         {},
@@ -391,7 +392,7 @@ void main() {
         [],
         [],
         {},
-      );
+      ).join('\n');
 
       expect(result, contains(jsonKeyExpectedResult));
       expect(result, contains(fieldExpectedResult));
@@ -405,7 +406,7 @@ void main() {
       const className = 'Animals';
       const jsonKeyExpectedResult = "\t@JsonKey(name: 'Animals')\n";
       const fieldExpectedResult = 'final Pet animals';
-      final result = generator.generatePropertiesContent(
+      final result = generator.generatePropertyContents(
         SwaggerRoot.empty,
         map,
         {},
@@ -416,7 +417,7 @@ void main() {
         [],
         [],
         {},
-      );
+      ).join('\n');
 
       expect(result, contains(jsonKeyExpectedResult));
       expect(result, contains(fieldExpectedResult));
@@ -430,7 +431,7 @@ void main() {
       const className = 'Animals';
       const jsonKeyExpectedResult = "\t@JsonKey(name: 'with')\n";
       const fieldExpectedResult = 'final Pet \$with';
-      final result = generator.generatePropertiesContent(
+      final result = generator.generatePropertyContents(
         SwaggerRoot.empty,
         map,
         {},
@@ -441,7 +442,7 @@ void main() {
         [],
         [],
         {},
-      );
+      ).join('\n');
 
       expect(result, contains(jsonKeyExpectedResult));
       expect(result, contains(fieldExpectedResult));
@@ -549,62 +550,116 @@ void main() {
   });
 
   group('generateEqualsOverride', () {
-    test(
-        "Should not return generated equals due to overrideEqualsAndHashcode set to false",
-        () {
-      const className = 'Animals';
+    const fields = [(type: 'String', name: 'foo')];
+
+    test('is empty when overrideEqualsAndHashcode is false', () {
       final result = generator3.generateEqualsOverride(
-        "final String foo;",
-        className,
+        fields,
+        'Animals',
         generator3.options,
       );
 
       expect(result, isEmpty);
     });
 
-    test("Should not return generated equals due to empty properties", () {
-      const className = 'Animals';
-      final result = generator3.generateEqualsOverride(
-        "",
-        className,
-        generator3.options,
+    test('is empty for a class without fields', () {
+      final result = generator.generateEqualsOverride(
+        [],
+        'Animals',
+        generator.options,
       );
 
       expect(result, isEmpty);
     });
 
-    test("Should not return generated equals due to non-formatted properties",
-        () {
-      const className = 'Animals';
-      final result = generator3.generateEqualsOverride(
-        "not_a_property",
-        className,
-        generator3.options,
-      );
-
-      expect(result, isEmpty);
-    });
-
-    test("Should return generated equals", () {
-      const className = 'Animals';
+    test('compares collections deeply and other fields with ==', () {
       final expected = '''
 @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         (other is Animals &&
-            (identical(other.foo, foo) ||
-                const DeepCollectionEquality().equals(other.foo, foo))
-    );
+            other.runtimeType == runtimeType &&
+            other.foo == this.foo &&
+            const DeepCollectionEquality().equals(other.tags, this.tags));
   }
     ''';
       final result = generator.generateEqualsOverride(
-        "final String foo;",
-        className,
+        [...fields, (type: 'List<String>?', name: 'tags')],
+        'Animals',
         generator.options,
       );
 
       expect(result, expected);
     });
+  });
+
+  group('generateGetHashContent', () {
+    test('is empty for a class without fields', () {
+      expect(generator.generateGetHashContent([], 'Animals', generator.options),
+          isEmpty);
+    });
+
+    test('hashes the same fields == compares', () {
+      final result = generator.generateGetHashContent(
+        [(type: 'String', name: 'foo'), (type: 'List<String>?', name: 'tags')],
+        'Animals',
+        generator.options,
+      );
+
+      expect(
+          result,
+          contains('Object.hash(runtimeType,\nthis.foo,\n'
+              'const DeepCollectionEquality().hash(this.tags))'));
+    });
+
+    test('hashes a list once there are more values than Object.hash takes', () {
+      final result = generator.generateGetHashContent(
+        [for (var i = 0; i < 20; i++) (type: 'int', name: 'f$i')],
+        'Animals',
+        generator.options,
+      );
+
+      expect(result, contains('Object.hashAll([runtimeType,'));
+    });
+  });
+
+  group('parseFieldDeclaration', () {
+    final cases = <(String, String, ModelField?)>[
+      ('plain', "\t@JsonKey(name: 'id')\n\t String id;", (type: 'String', name: 'id')),
+      (
+        'generic type with a space',
+        "@JsonKey(name: 'meta', includeIfNull: false)\n\tMap<String, Object>? meta;",
+        (type: 'Map<String, Object>?', name: 'meta'),
+      ),
+      (
+        'deprecated, default list value',
+        "\t@JsonKey(name: 'ids', defaultValue: <Ref>[])\n@deprecated\tList<Ref> ids;",
+        (type: 'List<Ref>', name: 'ids'),
+      ),
+      (
+        'converter and parens inside a quoted key',
+        "\t@_\$UuidJsonConverter()@JsonKey(name: 'a(b);') Uuid? id;",
+        (type: 'Uuid?', name: 'id'),
+      ),
+      (
+        'enum with a trailing default-value helper',
+        "@JsonKey(name: 'kind', fromJson: kindFromJson)\n enums.Kind kind;\n\nstatic enums.Kind kindFromJson(Object? value) => x(value);",
+        (type: 'enums.Kind', name: 'kind'),
+      ),
+      (
+        'final and late modifiers',
+        "@JsonKey(name: 'id')\n late final String id;",
+        (type: 'String', name: 'id'),
+      ),
+      ('ignored key', '', null),
+      ('no declaration', "@JsonKey(name: 'id'", null),
+    ];
+
+    for (final (name, content, expected) in cases) {
+      test(name, () {
+        expect(generator.parseFieldDeclaration(content), expected);
+      });
+    }
   });
 
   group('Tests for getValidatedClassName', () {

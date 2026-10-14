@@ -1,6 +1,9 @@
 import 'package:swagger_dart_code_generator/src/code_generators/enum_model.dart';
 import 'package:swagger_dart_code_generator/src/code_generators/v3/swagger_enums_generator_v3.dart';
 import 'package:swagger_dart_code_generator/src/models/generator_options.dart';
+import 'package:swagger_dart_code_generator/src/code_generators/v3/swagger_models_generator_v3.dart';
+import 'package:swagger_dart_code_generator/src/swagger_code_generator.dart';
+import 'package:swagger_dart_code_generator/src/swagger_models/swagger_root.dart';
 import 'package:swagger_dart_code_generator/src/swagger_models/requests/swagger_request_parameter.dart';
 import 'package:test/test.dart';
 
@@ -67,6 +70,62 @@ void main() {
           incoming, overriddenParameters);
 
       expect(result.name, equals('Original parameter'));
+    });
+  });
+
+  group('enum helpers', () {
+    const color = EnumModel(
+        name: 'Color', values: ['red'], isInteger: false, enumNames: []);
+    const size = EnumModel(
+        name: 'Size', values: ['s'], isInteger: false, enumNames: []);
+
+    List<String> helperNames(String code) =>
+        RegExp(r'^\S.* (\w+)\(', multiLine: true)
+            .allMatches(code)
+            .map((m) => m.group(1)!)
+            .toList();
+
+    List<String> emitted(String code) =>
+        helperNames(SwaggerCodeGenerator().generateReferencedEnumHelpers(
+          [color, size],
+          GeneratorOptions(inputFolder: '', outputFolder: ''),
+          referencedBy: code,
+        ));
+
+    List<String> emittedByModels({required bool generateUnused}) =>
+        helperNames(SwaggerModelsGeneratorV3(GeneratorOptions(
+          inputFolder: '',
+          outputFolder: '',
+          generateUnusedEnumHelpers: generateUnused,
+        )).generate(
+          root: SwaggerRoot.fromJson({
+            'openapi': '3.0.0',
+            'info': {'title': 'test', 'version': '1'},
+            'paths': <String, dynamic>{},
+          }),
+          fileName: 'test',
+          allEnums: [color, size],
+        ));
+
+    test('emits only the helpers the code calls, plus the helpers they call',
+        () {
+      expect(emitted('toJson: colorListToJson, fromJson: colorListFromJson'),
+          ['colorFromJson', 'colorListToJson', 'colorListFromJson']);
+    });
+
+    test('emits nothing for code that calls no helper', () {
+      expect(emitted('class Foo {}'), isEmpty);
+    });
+
+    test('generateUnusedEnumHelpers makes the models emit every helper of every enum',
+        () {
+      final helpers = emittedByModels(generateUnused: true);
+      expect(helpers, hasLength(16));
+      expect(helpers, containsAll(['colorNullableToJson', 'sizeListFromJson']));
+    });
+
+    test('without generateUnusedEnumHelpers the models emit no helper', () {
+      expect(emittedByModels(generateUnused: false), isEmpty);
     });
   });
 }
