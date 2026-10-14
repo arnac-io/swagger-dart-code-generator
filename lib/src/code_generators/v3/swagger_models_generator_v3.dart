@@ -47,7 +47,7 @@ class SwaggerModelsGeneratorV3 extends SwaggerModelsGenerator {
       root: root,
       fileName: fileName,
       classes: distinctClasses,
-      generateEnumsMethods: true,
+      generateEnumsMethods: options.generateUnusedEnumHelpers,
       allEnums: allEnums,
     );
   }

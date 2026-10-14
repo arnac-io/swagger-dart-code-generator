@@ -466,6 +466,25 @@ void main() {
       expect(wrapperRegion, contains('factory W2.a(Aa value) => W2()..a = value;'));
       expect(wrapperRegion, contains('factory W2.b(Bb value) => W2()..b = value;'));
     });
+
+    test('only a wrapper opts out of json_serializable fromJson/toJson', () {
+      final schemas = <String, SwaggerSchema>{
+        'Aa': _objectWithProps({'id': _string()}),
+        'Bb': _objectWithProps({'id': _string()}),
+        'W2': _wrapper(
+          propertyName: 'type',
+          mapping: {
+            'a': '#/components/schemas/Aa',
+            'b': '#/components/schemas/Bb',
+          },
+        ),
+      };
+      final out = _runGenerate(schemas);
+      const optOut = ', createFactory: false, createToJson: false)';
+
+      expect(out, contains('$optOut\nclass W2'));
+      expect(out, contains('@JsonSerializable(explicitToJson: true )\nclass Aa'));
+    });
   });
 
   group('undecoded payloads', () {

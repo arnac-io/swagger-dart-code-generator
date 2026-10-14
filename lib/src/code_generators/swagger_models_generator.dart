@@ -1651,7 +1651,11 @@ String toString() => jsonEncode(this);
 
     final toJson = generateToJson(schema, validatedClassName);
 
-    final createToJson = generateCreateToJson(schema, validatedClassName);
+    // A wrapper defines its own static `_$XFromJson`/`_$XToJson`, so the
+    // json_serializable pair would only be dead code decoding nonsense keys.
+    final createToJson = hasMapping
+        ? ', createFactory: false, createToJson: false'
+        : generateCreateToJson(schema, validatedClassName);
 
     // ── oneOf decorations ───────────────────────────────────────────────────
     // For wrappers: prepend `sealed class I<wrapperName> { ... }` and inject a
@@ -1690,8 +1694,8 @@ $oneOfInterfaceBlock
 @JsonSerializable(explicitToJson: true $createToJson)
 class $validatedClassName$oneOfImplementsClause{
 \t $validatedClassName($generatedConstructorProperties);\n
-\t$fromJson${hasMapping ? '' : ''}\n
-\t$toJson${hasMapping ? '' : ''}\n
+\t$fromJson\n
+\t$toJson\n
 $generatedProperties
 \tstatic const fromJsonFactory = _\$${validatedClassName}FromJson;
 $wrapperExtras$oneOfSubtypeStubs

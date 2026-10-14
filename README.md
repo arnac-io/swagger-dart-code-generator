@@ -90,6 +90,7 @@ targets:
 | `nullable_models` | `-` | `false` | List of model names should have force-nullable properties. Example of usage in [build.yaml](https://github.com/epam-cross-platform-lab/swagger-dart-code-generator/blob/master/example/build.yaml). |
 | `override_equals_and_hashcode` | `-` | `true` | If need to decrease app size - you can disable generation of `hashcode` and `Equals` method. Generated fields are mutable, so don't mutate a model while it is a `Set` element or `Map` key. |
 | `generate_copy_with` | `true` | `false` | Generates `copyWith`/`copyWithWrapped` extensions for models (not oneOf wrappers). Disable to decrease app size. |
+| `generate_unused_enum_helpers` | `true` | `false` | Generates every top-level enum (de)serialization helper (`xToJson`, `xListFromJson`, ...). If false, only helpers the generated models and requests call are emitted. Disable to decrease app size. |
 | `overriden_models` | `-` | `false` | List of manually written models that will replace the generated one. Can be different for each file. See example [here](#overriden-models-implementation) |
 | `use_path_for_request_names` | `true` | `false` | Can be false only if all requests has unique `operationId`. It gives readable names for requests. |
 | `add_base_path_to_requests` | `false` | `false` | Add swagger base path to all request path. |
