@@ -33,6 +33,8 @@ class GeneratorOptions {
     this.additionalHeaders = const [],
     this.ignoredKeys = const [],
     this.overrideEqualsAndHashcode = true,
+    this.generateCopyWith = true,
+    this.generateUnusedEnumHelpers = true,
     this.overrideToString = true,
     this.pageWidth,
     this.scalars = const {},
@@ -54,6 +56,8 @@ class GeneratorOptions {
   final int? pageWidth;
   final bool overrideToString;
   final bool overrideEqualsAndHashcode;
+  final bool generateCopyWith;
+  final bool generateUnusedEnumHelpers;
   final String multipartFileType;
   final String urlencodedFileType;
   final bool withConverter;

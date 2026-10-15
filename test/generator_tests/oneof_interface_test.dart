@@ -1,7 +1,7 @@
 // Tests for the `oneOf` + `discriminator` interface generation:
 //   • `sealed class IXxx` emission alongside the wrapper class
 //   • `implements IXxx` injection on each subtype
-//   • `_active` field + `active` getter on the wrapper
+//   • computed `active` getter and per-variant factories on the wrapper
 //   • `@override T? get foo => null;` stubs in subtypes missing a lax-common prop
 //   • Transitive type unification (one wrapper's subtype implementing another wrapper's interface)
 //   • Edge cases: 1-subtype wrapper, 0-common-prop wrapper, enum-divergence rejection
@@ -59,15 +59,30 @@ SwaggerSchema _ref(String name) =>
 SwaggerSchema _objectWithProps(Map<String, SwaggerSchema> properties) =>
     SwaggerSchema(type: 'object', properties: properties);
 
-SwaggerModelsGenerator _gen({bool overrideEquals = false}) =>
+SwaggerModelsGenerator _gen({
+  bool overrideEquals = false,
+  bool generateCopyWith = true,
+  List<String> ignoredKeys = const [],
+}) =>
     SwaggerModelsGeneratorV3(GeneratorOptions(
       inputFolder: '',
       outputFolder: '',
       overrideEqualsAndHashcode: overrideEquals,
+      generateCopyWith: generateCopyWith,
+      ignoredKeys: ignoredKeys,
     ));
 
-String _runGenerate(Map<String, SwaggerSchema> schemas) {
-  final generator = _gen();
+String _runGenerate(
+  Map<String, SwaggerSchema> schemas, {
+  bool overrideEquals = false,
+  bool generateCopyWith = true,
+  List<String> ignoredKeys = const [],
+}) {
+  final generator = _gen(
+    overrideEquals: overrideEquals,
+    generateCopyWith: generateCopyWith,
+    ignoredKeys: ignoredKeys,
+  );
   return generator.generateBase(
     root: _root(schemas),
     fileName: 'test',
@@ -81,7 +96,7 @@ String _runGenerate(Map<String, SwaggerSchema> schemas) {
 
 void main() {
   group('strict intersection', () {
-    test('emits sealed IXxx, implements on subtypes, _active in wrapper', () {
+    test('emits sealed IXxx, implements on subtypes, active in wrapper', () {
       final schemas = <String, SwaggerSchema>{
         'EvmFoo': _objectWithProps({
           'id': _string(),
@@ -116,14 +131,15 @@ void main() {
       expect(out, contains('class EvmFoo implements IFoo{'));
       expect(out, contains('class SolanaFoo implements IFoo{'));
 
-      // Wrapper exposes `_active` field + `active` getter.
-      expect(out, contains('IFoo? _active;'));
-      expect(out, contains('IFoo? get active => _active;'));
-
-      // fromJson switch sets _active for each case.
-      expect(out, contains("case 'evm':"));
-      expect(out, contains('foo._active = foo.evm;'));
-      expect(out, contains('foo._active = foo.solana;'));
+      // Wrapper exposes `active`, computed from the variant fields.
+      expect(
+          out,
+          contains('IFoo? get active {\n'
+              '\t\tif (evm != null) return evm;\n'
+              '\t\tif (solana != null) return solana;\n'
+              '\t\treturn null;\n'
+              '\t}'));
+      expect(out, isNot(contains('_active')));
     });
   });
 
@@ -239,7 +255,7 @@ void main() {
       };
       final out = _runGenerate(schemas);
       expect(out, isNot(contains('sealed class IWrap')));
-      expect(out, isNot(contains('IWrap? _active;')));
+      expect(out, isNot(contains('IWrap? get active')));
       // Subtype is not decorated.
       expect(out, contains('class Only{'));
       expect(out, isNot(contains('class Only implements')));
@@ -263,7 +279,8 @@ void main() {
       };
       final out = _runGenerate(schemas);
       expect(out, isNot(contains('sealed class IX ')));
-      expect(out, isNot(contains('IX? _active;')));
+      expect(out, isNot(contains('IX? get active')));
+      expect(out, contains('factory X.one(X1 value) => X()..one = value;'));
     });
 
     test('property with divergent enum refs per subtype is rejected', () {
@@ -366,6 +383,29 @@ void main() {
               'class PayloadA implements IDualKeyWrap, IDualKeyWrap')));
     });
 
+    test('a class shared by several discriminator values gets no per-value factory',
+        () {
+      final schemas = <String, SwaggerSchema>{
+        'PayloadA': _objectWithProps({'id': _string()}),
+        'PayloadB': _objectWithProps({'id': _string()}),
+        'DualKeyWrap': _wrapper(
+          propertyName: 'op',
+          mapping: {
+            'eq': '#/components/schemas/PayloadA',
+            'neq': '#/components/schemas/PayloadA',
+            'gt': '#/components/schemas/PayloadB',
+          },
+        ),
+      };
+      final wrapper = _extractClass(_runGenerate(schemas), 'DualKeyWrap');
+
+      expect(wrapper, contains('factory DualKeyWrap.gt(PayloadB value)'));
+      expect(wrapper, isNot(contains('factory DualKeyWrap.eq(')));
+      expect(wrapper, isNot(contains('factory DualKeyWrap.neq(')));
+      expect(wrapper, contains('if (eq != null) return eq;'));
+      expect(wrapper, contains('if (neq != null) return neq;'));
+    });
+
     test('properties listed in options.ignoredKeys are skipped from the interface',
         () {
       final schemas = <String, SwaggerSchema>{
@@ -407,7 +447,8 @@ void main() {
   });
 
   group('wrapper extras placement', () {
-    test('_active field and active getter live inside the wrapper class', () {
+    test('active getter and variant factories live inside the wrapper class',
+        () {
       final schemas = <String, SwaggerSchema>{
         'Aa': _objectWithProps({'id': _string()}),
         'Bb': _objectWithProps({'id': _string()}),
@@ -421,8 +462,159 @@ void main() {
       };
       final out = _runGenerate(schemas);
       final wrapperRegion = _extractClass(out, 'W2');
-      expect(wrapperRegion, contains('IW2? _active;'));
-      expect(wrapperRegion, contains('IW2? get active => _active;'));
+      expect(wrapperRegion, contains('IW2? get active {'));
+      expect(wrapperRegion, contains('factory W2.a(Aa value) => W2()..a = value;'));
+      expect(wrapperRegion, contains('factory W2.b(Bb value) => W2()..b = value;'));
+    });
+
+    test('only a wrapper opts out of json_serializable fromJson/toJson', () {
+      final schemas = <String, SwaggerSchema>{
+        'Aa': _objectWithProps({'id': _string()}),
+        'Bb': _objectWithProps({'id': _string()}),
+        'W2': _wrapper(
+          propertyName: 'type',
+          mapping: {
+            'a': '#/components/schemas/Aa',
+            'b': '#/components/schemas/Bb',
+          },
+        ),
+      };
+      final out = _runGenerate(schemas);
+      const optOut = ', createFactory: false, createToJson: false)';
+
+      expect(out, contains('$optOut\nclass W2'));
+      expect(out, contains('@JsonSerializable(explicitToJson: true )\nclass Aa'));
+    });
+  });
+
+  group('undecoded payloads', () {
+    final schemas = <String, SwaggerSchema>{
+      'Aa': _objectWithProps({'id': _string()}),
+      'Bb': _objectWithProps({'id': _string()}),
+      'W3': _wrapper(
+        propertyName: 'kind',
+        mapping: {
+          'a': '#/components/schemas/Aa',
+          'b': '#/components/schemas/Bb',
+        },
+      ),
+    };
+
+    test('an unknown discriminator keeps the payload and is reported once per value',
+        () {
+      final wrapper = _extractClass(_runGenerate(schemas), 'W3');
+
+      expect(wrapper, contains('static final Set<Object?> _reportedUnknownValues = {};'));
+      expect(
+          wrapper,
+          contains("default: w3._undecodedJson = Map<String, dynamic>.unmodifiable(json);"
+              " if (_reportedUnknownValues.add(json['kind']))"
+              " SwaggerReporterHelper.report('Unknown W3 kind=\${json['kind']}');"));
+      expect(wrapper, isNot(contains('undecodedDiscriminator')));
+    });
+
+    test('undecodedJson is exposed only while no variant is set', () {
+      final wrapper = _extractClass(_runGenerate(schemas), 'W3');
+
+      expect(
+          wrapper,
+          contains('Map<String, dynamic>? get undecodedJson =>'
+              ' a == null && b == null ? _undecodedJson : null;'));
+    });
+
+    test('a variant that fails to decode keeps the payload and names the case',
+        () {
+      final wrapper = _extractClass(_runGenerate(schemas), 'W3');
+
+      expect(
+          wrapper,
+          contains("case 'a': try { w3.a = _\$AaFromJson(json); } catch(ex) {"
+              " w3._undecodedJson = Map<String, dynamic>.unmodifiable(json);"
+              " SwaggerReporterHelper.report('GenerateError in W3 (kind=a) \${ex.toString()}'); } break;"));
+    });
+
+    test('toJson writes one variant, else a copy of the undecoded payload, never a merge',
+        () {
+      final wrapper = _extractClass(_runGenerate(schemas), 'W3');
+
+      expect(wrapper, contains('if (a != null) return a!.toJson();'));
+      expect(wrapper, contains('if (b != null) return b!.toJson();'));
+      expect(
+          wrapper,
+          contains('return undecoded != null'
+              ' ? Map<String, dynamic>.of(undecoded) : _\$W3ToJson(this);'));
+      expect(wrapper, isNot(contains('..addAll(')));
+    });
+  });
+
+  group('value equality', () {
+    final schemas = <String, SwaggerSchema>{
+      'Aa': _objectWithProps({'id': _string(), 'child': _ref('Bb')}),
+      'Bb': _objectWithProps({'id': _string()}),
+      'W4': _wrapper(
+        propertyName: 'kind',
+        mapping: {
+          'a': '#/components/schemas/Aa',
+          'b': '#/components/schemas/Bb',
+        },
+      ),
+    };
+
+    Set<String> comparedFields(String cls) =>
+        RegExp(r'other\.(\w+)').allMatches(cls).map((m) => m.group(1)!).toSet()
+          ..remove('runtimeType');
+    Set<String> hashedFields(String cls) {
+      final hash = cls.substring(cls.indexOf('int get hashCode'));
+      return RegExp(r'this\.(\w+)').allMatches(hash).map((m) => m.group(1)!).toSet();
+    }
+
+    test('a plain model compares, hashes and copies every field', () {
+      final out = _runGenerate(schemas, overrideEquals: true);
+      final model = _extractClass(out, 'Aa');
+
+      expect(model, contains('other is Aa &&\n            other.runtimeType == runtimeType'));
+      expect(comparedFields(model), {'id', 'child'});
+      expect(hashedFields(model), {'id', 'child'});
+      expect(
+          out,
+          contains(
+              'extension \$AaExtension on Aa { Aa copyWith({String? id, Bb? child})'));
+      expect(out,
+          contains('Aa copyWithWrapped({Wrapped<String?>? id, Wrapped<Bb?>? child})'));
+    });
+
+    test('a wrapper compares and hashes its variants and undecoded payload, without copyWith',
+        () {
+      final out = _runGenerate(schemas, overrideEquals: true);
+      final wrapper = _extractClass(out, 'W4');
+
+      expect(comparedFields(wrapper), {'a', 'b', 'undecodedJson'});
+      expect(hashedFields(wrapper), {'a', 'b', 'undecodedJson'});
+      expect(out, isNot(contains('W4Extension')));
+    });
+
+    test('overrideEqualsAndHashcode false keeps identity equality', () {
+      final out = _runGenerate(schemas);
+
+      for (final cls in ['Aa', 'W4']) {
+        expect(_extractClass(out, cls), isNot(contains('operator ==')));
+        expect(_extractClass(out, cls), isNot(contains('hashCode')));
+      }
+    });
+
+    test('generateCopyWith false emits no copyWith', () {
+      expect(_runGenerate(schemas, generateCopyWith: false),
+          isNot(contains('copyWith')));
+    });
+
+    test('copyWith passes only fields the constructor accepts', () {
+      final out = _runGenerate({
+        'Cc': _objectWithProps({'id': _string(), 'foo_bar': _string()}),
+      }, ignoredKeys: ['fooBar']);
+
+      expect(_extractClass(out, 'Cc'), contains('String? fooBar;'));
+      expect(out, contains('Cc copyWith({String? id})'));
+      expect(out, isNot(contains('fooBar: fooBar')));
     });
   });
 }
