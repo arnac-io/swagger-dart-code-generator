@@ -591,6 +591,24 @@ void main() {
 
       expect(result, expected);
     });
+
+    test('skips the identity shortcut when a field is named identical', () {
+      final expected = '''
+@override
+  bool operator ==(Object other) {
+    return (other is Animals &&
+            other.runtimeType == runtimeType &&
+            other.identical == this.identical);
+  }
+    ''';
+      final result = generator.generateEqualsOverride(
+        [(type: 'bool?', name: 'identical')],
+        'Animals',
+        generator.options,
+      );
+
+      expect(result, expected);
+    });
   });
 
   group('generateGetHashContent', () {

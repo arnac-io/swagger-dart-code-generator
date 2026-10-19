@@ -1943,11 +1943,15 @@ $getters
             : 'other.${f.name} == this.${f.name}')
         .join(' &&\n            ');
 
+    // A field named `identical` shadows the top-level function inside the class.
+    final identityCheck = fields.any((f) => f.name == 'identical')
+        ? ''
+        : 'identical(this, other) ||\n        ';
+
     return '''
 @override
   bool operator ==(Object other) {
-    return identical(this, other) ||
-        (other is $validatedClassName &&
+    return $identityCheck(other is $validatedClassName &&
             other.runtimeType == runtimeType &&
             $checks);
   }
