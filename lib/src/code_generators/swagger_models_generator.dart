@@ -339,6 +339,57 @@ abstract class SwaggerModelsGenerator extends SwaggerGeneratorBase {
     return converters + results + allEnumsString;
   }
 
+  static final _summaryKey = RegExp(r'^\w+$');
+  static const _scalarTypes = {'String', 'int', 'double', 'num', 'bool', 'DateTime'};
+
+  /// Emits a `toString()` that prints only the [allowed] top-level scalar
+  /// fields, so logging a model never reveals anything else it carries. A
+  /// wrapper prints the summary of its decoded variant instead.
+  String generateToStringOverride(
+    String className,
+    List<({String key, ModelField field})> allowed,
+    List<String> variantFields,
+    List<String> allEnumNames,
+  ) {
+    // Reserved and digit-led schema names carry a `$` that would interpolate.
+    final name = className.replaceAll(r'$', r'\$');
+    if (variantFields.isNotEmpty) {
+      final checks = variantFields
+          .map((f) => '\t\tif ($f != null) return $f.toString();\n')
+          .join();
+      return '''
+@override
+String toString() {
+$checks\t\treturn '$name(variant: \${undecodedJson == null ? 'none' : 'unknown'})';
+}
+''';
+    }
+    final parts = [
+      for (final a in allowed)
+        if (_summaryValue(a.field, allEnumNames) case final value?)
+          '${a.key}: $value',
+    ];
+    return '''
+@override
+String toString() => '$name(${parts.join(', ')})';
+''';
+  }
+
+  /// The interpolation printing a scalar field, or null for a type that can
+  /// hold other data (a model, list, map, `Object` or `dynamic`).
+  String? _summaryValue(ModelField field, List<String> allEnumNames) {
+    final nullable = field.type.endsWith('?');
+    final type =
+        nullable ? field.type.substring(0, field.type.length - 1) : field.type;
+    if (_scalarTypes.contains(type)) {
+      return '\${${field.name}}';
+    }
+    if (type.startsWith('enums.') || allEnumNames.contains(type)) {
+      return '\${${field.name}${nullable ? '?' : ''}.name}';
+    }
+    return null;
+  }
+
   static String getValidatedParameterName(String parameterName) {
     if (parameterName.isEmpty) {
       return parameterName;
@@ -1643,11 +1694,24 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
       options,
     );
 
+    final badKey = options.toStringFields
+        .firstWhereOrNull((key) => !_summaryKey.hasMatch(key));
+    if (badKey != null) {
+      throw ArgumentError.value(badKey, 'to_string_fields',
+          'must be a plain JSON key (letters, digits, underscores)');
+    }
     final toStringOverride = options.overrideToString
-        ? '''
-@override
-String toString() => jsonEncode(this);
-'''
+        ? generateToStringOverride(
+            validatedClassName,
+            [
+              for (final (i, key) in properties.keys.indexed)
+                if (options.toStringFields.contains(key) &&
+                    propertyContents[i].trim().isNotEmpty)
+                  (key: key, field: parseFieldDeclaration(propertyContents[i])!),
+            ],
+            variants.map((v) => v.field).toList(),
+            allEnumNames,
+          )
         : '';
 
     final hasMapping = variants.isNotEmpty;

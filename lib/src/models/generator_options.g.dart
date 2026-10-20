@@ -82,6 +82,10 @@ GeneratorOptions _$GeneratorOptionsFromJson(Map json) => GeneratorOptions(
       generateUnusedEnumHelpers:
           json['generate_unused_enum_helpers'] as bool? ?? true,
       overrideToString: json['override_to_string'] as bool? ?? true,
+      toStringFields: (json['to_string_fields'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          const [],
       pageWidth: (json['page_width'] as num?)?.toInt(),
       scalars: (json['scalars'] as Map?)?.map(
             (k, e) => MapEntry(k as String,
@@ -112,6 +116,7 @@ Map<String, dynamic> _$GeneratorOptionsToJson(GeneratorOptions instance) =>
       'add_base_path_to_requests': instance.addBasePathToRequests,
       'page_width': instance.pageWidth,
       'override_to_string': instance.overrideToString,
+      'to_string_fields': instance.toStringFields,
       'override_equals_and_hashcode': instance.overrideEqualsAndHashcode,
       'generate_copy_with': instance.generateCopyWith,
       'generate_unused_enum_helpers': instance.generateUnusedEnumHelpers,

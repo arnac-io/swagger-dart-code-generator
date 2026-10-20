@@ -36,6 +36,7 @@ class GeneratorOptions {
     this.generateCopyWith = true,
     this.generateUnusedEnumHelpers = true,
     this.overrideToString = true,
+    this.toStringFields = const [],
     this.pageWidth,
     this.scalars = const {},
     this.overridenModels = const [],
@@ -55,6 +56,7 @@ class GeneratorOptions {
   final bool addBasePathToRequests;
   final int? pageWidth;
   final bool overrideToString;
+  final List<String> toStringFields;
   final bool overrideEqualsAndHashcode;
   final bool generateCopyWith;
   final bool generateUnusedEnumHelpers;
