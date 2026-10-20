@@ -1142,6 +1142,11 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
           options.modelPostfix,
           null,
         );
+        // A value schema that resolves to `Object` (anyOf, free-form) can hold
+        // JSON null; `e as Object` would throw and drop the whole model.
+        if (valueTypeName == kDefaultBodyParameter) {
+          valueTypeName = '$kDefaultBodyParameter?';
+        }
         // Double-check that the resolved type name is not an enum
         if (!allEnumNames.contains(valueTypeName)) {
           typeName = 'Map<String, $valueTypeName>';

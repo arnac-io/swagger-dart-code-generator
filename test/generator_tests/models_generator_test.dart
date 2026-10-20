@@ -726,6 +726,19 @@ void main() {
 
       expect(result, contains('final Map<String,dynamic>? metadata'));
     });
+
+    test('keeps null values of an anyOf value schema', () {
+      final map = SwaggerRoot.parse(objectWithAnyOfAdditionalProperties);
+
+      final result = generator.generate(
+        root: map,
+        fileName: 'fileName',
+        allEnums: [],
+      );
+
+      expect(result, contains('Map<String, Object?>? metadata'));
+      expect(result, isNot(contains('Map<String, Object>? metadata')));
+    });
   });
 
   group('Tests for overridden format types', () {

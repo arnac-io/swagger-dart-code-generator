@@ -835,6 +835,31 @@ const objectWithadditionalProperties = '''
 }
 ''';
 
+const objectWithAnyOfAdditionalProperties = '''
+{
+  "components" : {
+    "schemas" : {
+      "FooDto": {
+        "type": "object",
+        "properties": {
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "anyOf": [
+                {"type": "array", "items": {"type": "string"}},
+                {"type": "string"},
+                {"type": "integer"},
+                {"type": "boolean"}
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}
+''';
+
 const String schemasWithUuidsInProperties = '''
 {
   "openapi": "3.0.1",
