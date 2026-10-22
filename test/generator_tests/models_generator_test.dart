@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:swagger_dart_code_generator/src/code_generators/swagger_models_generator.dart';
 import 'package:swagger_dart_code_generator/src/code_generators/v2/swagger_models_generator_v2.dart';
 import 'package:swagger_dart_code_generator/src/code_generators/v3/swagger_models_generator_v3.dart';
@@ -796,6 +798,173 @@ void main() {
       expect(result, contains('class _\$UuidJsonConverter implements json.JsonConverter<Uuid, String>'));
       expect(result, contains('fromJson(json) => customUuidParse(json);'));
       expect(result, contains('toJson(json) => customUuidToString(json);'));
+    });
+  });
+
+  group('toString summary', () {
+    const spec = '''
+{
+  "openapi": "3.0.1",
+  "info": {"title": "t", "version": "1"},
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Child": {
+        "type": "object",
+        "properties": {"id": {"type": "string"}, "seed": {"type": "string"}}
+      },
+      "Share": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string"},
+          "state": {"type": "string", "enum": ["active", "revoked"]},
+          "status": {"type": "integer"},
+          "type": {"\$ref": "#/components/schemas/Child"},
+          "tags": {"type": "array", "items": {"type": "string"}},
+          "encrypted_share": {"type": "string"}
+        }
+      },
+      "Item": {
+        "oneOf": [
+          {"\$ref": "#/components/schemas/Share"},
+          {"\$ref": "#/components/schemas/Child"}
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "share": "#/components/schemas/Share",
+            "child": "#/components/schemas/Child"
+          }
+        }
+      }
+    }
+  }
+}
+''';
+
+    SwaggerModelsGeneratorV3 generatorWith(List<String> fields,
+            {bool overrideToString = true}) =>
+        SwaggerModelsGeneratorV3(GeneratorOptions(
+          inputFolder: '',
+          outputFolder: '',
+          toStringFields: fields,
+          overrideToString: overrideToString,
+        ));
+
+    String generateWith(List<String> fields, {bool overrideToString = true}) =>
+        generatorWith(fields, overrideToString: overrideToString).generate(
+          root: SwaggerRoot.parse(spec),
+          fileName: 'fileName',
+          allEnums: [],
+        );
+
+    test('never serializes a model in toString, whatever the options', () {
+      for (final fields in [<String>[], ['id', 'encrypted_share']]) {
+        for (final overrideToString in [true, false]) {
+          final result =
+              generateWith(fields, overrideToString: overrideToString);
+
+          expect(result, isNot(contains('jsonEncode(this)')));
+        }
+      }
+    });
+
+    test('prints only allow-listed top-level scalar fields', () {
+      final result = generateWith(['id', 'state', 'status', 'type', 'tags']);
+
+      expect(
+          result,
+          contains("String toString() => "
+              "'Share(id: \${id}, state: \${state?.name}, status: \${status})';"));
+      expect(result,
+          contains("String toString() => 'Child(id: \${id})';"));
+    });
+
+    test('prints the bare class name when no fields are allow-listed', () {
+      final result = generateWith([]);
+
+      expect(result, contains("String toString() => 'Share()';"));
+    });
+
+    test('delegates a wrapper to its decoded variant', () {
+      final result = generateWith(['id']);
+
+      expect(
+          result,
+          contains('if (share != null) return share.toString();\n'
+              '\t\tif (child != null) return child.toString();\n'
+              "\t\treturn 'Item(variant: \${undecodedJson == null ? 'none' : 'unknown'})';"));
+    });
+
+    test('escapes a dollar sign in the class name', () {
+      final override = generatorWith(['id']).generateToStringOverride(
+          r'Type$', [(key: 'id', field: (type: 'String?', name: 'id'))], [], []);
+
+      expect(override, contains(r"""String toString() => 'Type\$(id: ${id})';"""));
+    });
+
+    test('skips an allow-listed key that ignored_keys dropped', () {
+      final result = SwaggerModelsGeneratorV3(GeneratorOptions(
+        inputFolder: '',
+        outputFolder: '',
+        toStringFields: ['id', 'encrypted_share'],
+        ignoredKeys: ['encrypted_share'],
+      )).generate(
+        root: SwaggerRoot.parse(spec),
+        fileName: 'fileName',
+        allEnums: [],
+      );
+
+      expect(result, contains("String toString() => 'Share(id: \${id})';"));
+    });
+
+    test('emits no toString when override_to_string is off', () {
+      final result = generateWith(['id'], overrideToString: false);
+
+      expect(result, isNot(contains('String toString()')));
+    });
+
+    test('rejects an allow-list entry that is not a plain JSON key', () {
+      expect(() => generateWith([r"id'$x"]), throwsArgumentError);
+    });
+
+    test('emitted summary hides unlisted and nested values', () async {
+      final override = generatorWith(['id', 'state', 'type']).generateToStringOverride(
+        'Share',
+        [
+          (key: 'id', field: (type: 'String?', name: 'id')),
+          (key: 'state', field: (type: 'enums.ShareState?', name: 'state')),
+          (key: 'type', field: (type: 'Child?', name: 'type')),
+        ],
+        [],
+        [],
+      );
+      final dir = await Directory.systemTemp.createTemp('summary_test');
+      addTearDown(() => dir.delete(recursive: true));
+      final script = File('${dir.path}/main.dart');
+      await script.writeAsString('''
+import 'enums.dart' as enums;
+class Child {
+  String? id = 'CHILD_ID';
+  String? seed = 'SEED_SECRET';
+}
+class Share {
+  String? id = 'SHARE_ID';
+  enums.ShareState? state = enums.ShareState.active;
+  Child? type = Child();
+  String? encryptedShare = 'SHARE_SECRET';
+$override
+}
+void main() => print(Share());
+''');
+      await File('${dir.path}/enums.dart')
+          .writeAsString('enum ShareState { active }');
+
+      final run = await Process.run('dart', ['run', script.path]);
+
+      expect(run.stderr, isEmpty);
+      expect((run.stdout as String).trim(),
+          'Share(id: SHARE_ID, state: active)');
     });
   });
 }
