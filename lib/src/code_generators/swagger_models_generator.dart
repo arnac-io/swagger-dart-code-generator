@@ -1624,7 +1624,11 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
   ) {
     final properties = getModelProperties(schema, schemas, allClasses);
 
-    final requiredProperties = _getRequired(schema, schemas);
+    // Removing a required property breaks every client that hard-casts it, so
+    // a deprecated one is decoded as nullable ahead of its removal.
+    final requiredProperties = _getRequired(schema, schemas)
+        .where((key) => properties[key]?.deprecated != true)
+        .toList();
 
     final generatedConstructorProperties = generateConstructorPropertiesContent(
       className: className,

@@ -860,6 +860,32 @@ const objectWithAnyOfAdditionalProperties = '''
 }
 ''';
 
+const objectWithRequiredDeprecatedProperties = '''
+{
+  "components" : {
+    "schemas" : {
+      "Price": {
+        "type": "object",
+        "required": ["amount"],
+        "properties": {
+          "amount": {"type": "string"}
+        }
+      },
+      "FooVault": {
+        "type": "object",
+        "required": ["id", "derivation_path", "type", "price"],
+        "properties": {
+          "id": {"type": "string"},
+          "derivation_path": {"type": "string", "deprecated": true},
+          "type": {"type": "string", "enum": ["foo_vault"], "deprecated": true},
+          "price": {"$ref": "#/components/schemas/Price", "deprecated": true}
+        }
+      }
+    }
+  }
+}
+''';
+
 const String schemasWithUuidsInProperties = '''
 {
   "openapi": "3.0.1",

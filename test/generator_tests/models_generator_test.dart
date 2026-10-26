@@ -743,6 +743,33 @@ void main() {
     });
   });
 
+  group('Tests for deprecated properties', () {
+    final result = generator.generate(
+      root: SwaggerRoot.parse(objectWithRequiredDeprecatedProperties),
+      fileName: 'fileName',
+      allEnums: [],
+    );
+
+    test('generates required deprecated properties as nullable', () {
+      expect(result, contains('String? derivationPath;'));
+      expect(result, contains('enums.FooVaultTypeGenerated? type;'));
+      expect(result,
+          contains('fromJson: fooVaultTypeGeneratedNullableFromJson'));
+      expect(result, contains('Price? price;'));
+    });
+
+    test('keeps the constructor from requiring deprecated properties', () {
+      expect(result, contains('required this.id,'));
+      expect(result, contains('\t\tthis.derivationPath,'));
+      expect(result, contains('\t\tthis.type,'));
+      expect(result, contains('\t\tthis.price,'));
+    });
+
+    test('keeps required non-deprecated properties non-nullable', () {
+      expect(result, contains(' String id;'));
+    });
+  });
+
   group('Tests for overridden format types', () {
     test('Should include deserialize function in JsonKey annotation', () {
       final map = SwaggerRoot.parse(schemasWithUuidsInProperties);
