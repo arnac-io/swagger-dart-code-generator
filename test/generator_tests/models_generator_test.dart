@@ -744,29 +744,57 @@ void main() {
   });
 
   group('Tests for deprecated properties', () {
-    final result = generator.generate(
-      root: SwaggerRoot.parse(objectWithRequiredDeprecatedProperties),
-      fileName: 'fileName',
-      allEnums: [],
-    );
+    String generateClass(String className, {List<String> ignoredKeys = const []}) {
+      final result = SwaggerModelsGeneratorV3(
+        GeneratorOptions(
+          inputFolder: '',
+          outputFolder: '',
+          ignoredKeys: ignoredKeys,
+        ),
+      ).generate(
+        root: SwaggerRoot.parse(objectWithRequiredDeprecatedProperties),
+        fileName: 'fileName',
+        allEnums: [],
+      );
+      final start = result.indexOf('class $className{');
+      final end = result.indexOf('\nclass ', start + 1);
+      return result.substring(start, end < 0 ? result.length : end);
+    }
 
     test('generates required deprecated properties as nullable', () {
-      expect(result, contains('String? derivationPath;'));
-      expect(result, contains('enums.FooVaultTypeGenerated? type;'));
-      expect(result,
+      final fooVault = generateClass('FooVault');
+
+      expect(fooVault, contains(' String? derivationPath;'));
+      expect(fooVault, contains(' enums.FooVaultTypeGenerated? type;'));
+      expect(fooVault,
           contains('fromJson: fooVaultTypeGeneratedNullableFromJson'));
-      expect(result, contains('Price? price;'));
+      expect(fooVault, contains('\tPrice? price;'));
+      expect(fooVault, contains(' List<String>? tags;'));
+      expect(fooVault, contains(' String id;'));
     });
 
-    test('keeps the constructor from requiring deprecated properties', () {
-      expect(result, contains('required this.id,'));
-      expect(result, contains('\t\tthis.derivationPath,'));
-      expect(result, contains('\t\tthis.type,'));
-      expect(result, contains('\t\tthis.price,'));
+    test('still requires deprecated properties in the constructor', () {
+      final fooVault = generateClass('FooVault');
+
+      for (final field in ['id', 'derivationPath', 'type', 'price', 'tags']) {
+        expect(fooVault, contains('required this.$field,'));
+      }
     });
 
-    test('keeps required non-deprecated properties non-nullable', () {
-      expect(result, contains(' String id;'));
+    test('applies to deprecated properties inherited through allOf', () {
+      final barVault = generateClass('BarVault');
+
+      expect(barVault, contains(' String? derivationPath;'));
+      expect(barVault, contains('required this.derivationPath,'));
+      expect(barVault, contains(' String id;'));
+    });
+
+    test('keeps a deprecated property listed in ignored_keys non-nullable',
+        () {
+      final fooVault = generateClass('FooVault', ignoredKeys: ['old_field']);
+
+      expect(fooVault, contains(' String oldField;'));
+      expect(fooVault, contains('required this.oldField,'));
     });
   });
 

@@ -1624,10 +1624,14 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
   ) {
     final properties = getModelProperties(schema, schemas, allClasses);
 
-    // Removing a required property breaks every client that hard-casts it, so
-    // a deprecated one is decoded as nullable ahead of its removal.
-    final requiredProperties = _getRequired(schema, schemas)
-        .where((key) => properties[key]?.deprecated != true)
+    final requiredKeys = _getRequired(schema, schemas);
+    // Removing a required property breaks every client that hard-casts it, so a
+    // deprecated one decodes as nullable while the constructor still requires it.
+    final nonNullableKeys = requiredKeys
+        .where((key) =>
+            properties[key]?.deprecated != true ||
+            // `ignored_keys` would drop the nullable field but not its parameter.
+            options.ignoredKeys.contains(key))
         .toList();
 
     final generatedConstructorProperties = generateConstructorPropertiesContent(
@@ -1636,7 +1640,7 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
       defaultValues: defaultValues,
       allEnumNames: allEnumNames,
       allEnumListNames: allEnumListNames,
-      requiredProperties: requiredProperties,
+      requiredProperties: requiredKeys,
     );
 
     final propertyContents = generatePropertyContents(
@@ -1648,7 +1652,7 @@ static $returnType $fromJsonFunction($valueType? value) => $enumNameCamelCase$fr
       classesWithNullableLists,
       allEnumNames,
       allEnumListNames,
-      requiredProperties,
+      nonNullableKeys,
       allClasses,
     );
     final generatedProperties = propertyContents.join('\n');
