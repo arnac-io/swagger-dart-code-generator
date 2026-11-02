@@ -860,6 +860,40 @@ const objectWithAnyOfAdditionalProperties = '''
 }
 ''';
 
+const objectWithRequiredDeprecatedProperties = '''
+{
+  "components" : {
+    "schemas" : {
+      "Price": {
+        "type": "object",
+        "required": ["amount"],
+        "properties": {
+          "amount": {"type": "string"}
+        }
+      },
+      "FooVault": {
+        "type": "object",
+        "required": ["id", "derivation_path", "type", "price", "tags", "old_field"],
+        "properties": {
+          "id": {"type": "string"},
+          "derivation_path": {"type": "string", "deprecated": true},
+          "type": {"type": "string", "enum": ["foo_vault"], "deprecated": true},
+          "price": {"$ref": "#/components/schemas/Price", "deprecated": true},
+          "tags": {"type": "array", "items": {"type": "string"}, "deprecated": true},
+          "old_field": {"type": "string", "deprecated": true}
+        }
+      },
+      "BarVault": {
+        "allOf": [
+          {"$ref": "#/components/schemas/FooVault"},
+          {"type": "object", "properties": {"name": {"type": "string"}}}
+        ]
+      }
+    }
+  }
+}
+''';
+
 const String schemasWithUuidsInProperties = '''
 {
   "openapi": "3.0.1",
