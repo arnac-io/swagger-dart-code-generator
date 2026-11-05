@@ -74,7 +74,8 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
         ..returns = Reference(className)
         ..name = 'create'
         ..static = true
-        ..docs.add('///`baseUrl` is ignored when `client` is given.')
+        ..docs.add(
+            '///When `client` is given, only `reporter` is used; every other argument is ignored.')
         ..optionalParameters.add(Parameter(
           (p) => p
             ..named = true

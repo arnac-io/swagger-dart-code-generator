@@ -79,8 +79,8 @@ void main() {
       final code = withoutWhitespace(generateCarsService());
 
       expect(code, contains('requiredUribaseUrl'));
-      expect(code, contains('baseUrl:baseUrl)'));
-      expect(code, isNot(contains('Uri.parse(')));
+      expect(code, contains('baseUrl:baseUrl'));
+      expect(code, isNot(contains('baseUrl??')));
     });
 
     test('create() sets the reporter only when one is passed', () {
@@ -89,6 +89,8 @@ void main() {
       expect(code,
           contains('if(reporter!=null){SwaggerReporterHelper.setReporter(reporter);}'));
       expect('setReporter('.allMatches(code), hasLength(1));
+      expect(code.indexOf('setReporter(reporter)'),
+          lessThan(code.indexOf('if(client!=null)')));
     });
   });
 }
