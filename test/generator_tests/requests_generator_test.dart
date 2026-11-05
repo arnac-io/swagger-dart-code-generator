@@ -62,5 +62,35 @@ void main() {
       expect(result,
           contains('Future<chopper.Response<CarModel>> carsMultipartPost'));
     });
+
+    String generateCarsService() => SwaggerRequestsGenerator(GeneratorOptions(
+          inputFolder: '',
+          outputFolder: '',
+        )).generate(
+          swaggerRoot: root,
+          className: 'CarsService',
+          fileName: 'cars_service',
+          allEnums: [],
+        );
+
+    String withoutWhitespace(String code) => code.replaceAll(RegExp(r'\s'), '');
+
+    test('create() requires baseUrl and has no spec-host fallback', () {
+      final code = withoutWhitespace(generateCarsService());
+
+      expect(code, contains('requiredUribaseUrl'));
+      expect(code, contains('baseUrl:baseUrl'));
+      expect(code, isNot(contains('baseUrl??')));
+    });
+
+    test('create() sets the reporter only when one is passed', () {
+      final code = withoutWhitespace(generateCarsService());
+
+      expect(code,
+          contains('if(reporter!=null){SwaggerReporterHelper.setReporter(reporter);}'));
+      expect('setReporter('.allMatches(code), hasLength(1));
+      expect(code.indexOf('setReporter(reporter)'),
+          lessThan(code.indexOf('if(client!=null)')));
+    });
   });
 }

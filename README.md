@@ -72,7 +72,6 @@ targets:
 | **`input_folder`** | **`-`** | **`true`** | **Path to folder with .swagger files (for ex. swagger_examples, or lib/swaggers).** |
 | **`output_folder`** | **`-`** | **`true`** | **Path to output folder (for ex. lib/generated).** |
 | `input_urls` | `[]` | `false` | Here you can mention list of files to be downloaded from the internet. You can check [example](https://github.com/epam-cross-platform-lab/swagger-dart-code-generator/blob/master/example/build.yaml) of usage. |
-| `with_base_url` | `true` | `false` | If this option is false, generator will ignore base url in swagger file. |
 | `use_required_attribute_for_headers` | `true` | `false` | If this option is false, generator will not add @required attribute to headers. |
 | `with_converter` | `true` | `false` | If option is true, combination of all mappings will be generated. |
 | `ignore_headers` | `false` | `false` | If option is true, headers will not be generated. |
@@ -93,7 +92,7 @@ targets:
 | `generate_unused_enum_helpers` | `true` | `false` | Generates every top-level enum (de)serialization helper (`xToJson`, `xListFromJson`, ...). If false, only helpers the generated models and requests call are emitted. Disable to decrease app size. |
 | `overriden_models` | `-` | `false` | List of manually written models that will replace the generated one. Can be different for each file. See example [here](#overriden-models-implementation) |
 | `use_path_for_request_names` | `true` | `false` | Can be false only if all requests has unique `operationId`. It gives readable names for requests. |
-| `add_base_path_to_requests` | `false` | `false` | Add swagger base path to all request path. |
+| `add_base_path_to_requests` | `false` | `false` | Add swagger base path to all request path. When `false`, the `baseUrl` passed to `create()` must include the spec's `basePath` (Swagger 2) or the `servers[].url` path (OpenAPI 3); when `true`, it must not include `basePath`. |
 | `multipart_file_type` | `List<int>` | `false` | Allow to override the generated class for multipart file (See #605). |
 | `override_to_string` | `bool` | `true` | Overrides `toString()` with a summary, `ClassName(key: value, ...)`, that prints only the fields listed in `to_string_fields`. A oneOf wrapper prints its decoded variant's summary, or `ClassName(variant: none\|unknown)`. A model is never serialized to JSON in `toString()`. |
 | `to_string_fields` | `[]` | `false` | JSON keys `toString()` may print. Only top-level fields of a scalar type (`String`, numbers, `bool`, `DateTime`, enums) are printed; nested models, lists and maps never are, even when their key is listed. Each entry must be a plain key (letters, digits, underscores). |

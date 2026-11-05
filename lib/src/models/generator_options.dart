@@ -6,7 +6,6 @@ part 'generator_options.g.dart';
 class GeneratorOptions {
   /// Instantiate generator options.
   GeneratorOptions({
-    this.withBaseUrl = true,
     this.addBasePathToRequests = false,
     this.withConverter = true,
     this.ignoreHeaders = false,
@@ -52,7 +51,6 @@ class GeneratorOptions {
 
   final bool usePathForRequestNames;
   final bool generateFirstSucceedResponse;
-  final bool withBaseUrl;
   final bool addBasePathToRequests;
   final int? pageWidth;
   final bool overrideToString;
