@@ -1792,16 +1792,16 @@ $copyWithMethod
   String _generateSealedInterfaceBlock(OneOfInterfaceInfo info) {
     final getters = info.commonProps.map((p) {
       final getter = '\t${p.dartType}? get ${p.camelName};';
-      final lacking = info.subtypesLacking[p.camelName];
-      if (lacking == null || lacking.isEmpty) return getter;
-      final names = lacking.map((n) => '[$n]').toList();
-      final list = names.length == 1
+      final names = _subtypesLacking(info, p).map((n) => '[$n]').toList();
+      if (names.isEmpty) return getter;
+      final variantList = names.length == 1
           ? names.single
           : '${names.sublist(0, names.length - 1).join(', ')} and ${names.last}';
-      final schemas =
+      final declareClause =
           names.length == 1 ? 'its schema declares' : 'their schemas declare';
       final doc = _wrapDocComment(
-          'Always null on $list: $schemas no `${p.snakeName}`.');
+          'Always null on $variantList: $declareClause no `${p.snakeName}`. '
+          'Other variants may also return null.');
       return '$doc\n$getter';
     }).join('\n');
     return '''
@@ -1815,11 +1815,22 @@ $getters
 ''';
   }
 
-  /// Word-wraps [text] into tab-indented `///` lines of at most 80 columns.
+  /// Sorted names of [info]'s subtypes whose schema lacks [p], i.e. the ones
+  /// that get a null stub for it.
+  List<String> _subtypesLacking(OneOfInterfaceInfo info, OneOfCommonProp p) => [
+        for (final e in _oneOfSubtypes.entries)
+          if (e.value.any(
+              (m) => m.interface == info && m.missingProps.contains(p)))
+            e.key,
+      ]..sort();
+
+  /// Word-wraps [text] at word boundaries into tab-indented `///` lines that
+  /// fit the page width once formatted at member indent; a single word longer
+  /// than a line is not split.
   String _wrapDocComment(String text) {
     const prefix = '\t/// ';
     // dart format turns the tab into a two-space member indent.
-    const width = 80 - 2 - 4;
+    final width = (options.pageWidth ?? 80) - 2 - 4;
     final lines = <String>[];
     var line = '';
     for (final word in text.split(' ')) {
@@ -1876,8 +1887,8 @@ $getters
     for (final m in ms) {
       for (final p in m.missingProps) {
         if (!seen.add(p.camelName)) continue;
-        lines.add(
-            '\t/// The schema declares no `${p.snakeName}` on this type; always null.');
+        lines.add(_wrapDocComment(
+            "Always null: this type's schema declares no `${p.snakeName}`."));
         lines.add('\t@override ${p.dartType}? get ${p.camelName} => null;');
       }
     }
@@ -2359,51 +2370,28 @@ int get hashCode => $hash;
     for (final w in working.values) {
       if (w.commonProps.isEmpty) continue;
 
-      final missingPerSubtype = [
-        for (final st in w.subtypes)
-          (
-            name: st.name,
-            missing: _missingCommonProps(
-                w.commonProps, _allPropsOf(st.schema, classes)),
-          ),
-      ];
-      final lacking = <String, Set<String>>{};
-      for (final s in missingPerSubtype) {
-        for (final p in s.missing) {
-          lacking.putIfAbsent(p.camelName, () => {}).add(s.name);
-        }
-      }
-
       final info = OneOfInterfaceInfo(
         wrapperName: w.wrapperName,
         interfaceName: 'I${w.wrapperName}',
         commonProps: List.unmodifiable(w.commonProps),
         subtypeNames: w.subtypes.map((s) => s.name).toList(growable: false),
-        subtypesLacking: {
-          for (final e in lacking.entries)
-            e.key: List.unmodifiable(e.value.toList()..sort()),
-        },
       );
       _oneOfWrappers[w.wrapperName] = info;
 
-      for (final s in missingPerSubtype) {
+      for (final st in w.subtypes) {
+        final declared = _allPropsOf(st.schema, classes);
+        final missing = info.commonProps
+            .where((p) => !declared.containsKey(p.snakeName))
+            .toList(growable: false);
         _oneOfSubtypes
-            .putIfAbsent(s.name, () => [])
+            .putIfAbsent(st.name, () => [])
             .add(OneOfSubtypeMembership(
               interface: info,
-              missingProps: s.missing,
+              missingProps: missing,
             ));
       }
     }
   }
-
-  List<OneOfCommonProp> _missingCommonProps(
-    List<OneOfCommonProp> commonProps,
-    Map<String, SwaggerSchema> declared,
-  ) =>
-      commonProps
-          .where((p) => !declared.containsKey(p.snakeName))
-          .toList(growable: false);
 
   /// Collects all schema properties of [schema], merging properties from any
   /// `allOf` references (resolved via [schemas]). Recursion is bounded.
@@ -2567,7 +2555,6 @@ class OneOfInterfaceInfo {
     required this.interfaceName,
     required this.commonProps,
     required this.subtypeNames,
-    required this.subtypesLacking,
   });
 
   /// PascalCase name of the wrapper class (e.g. "Vault").
@@ -2582,11 +2569,6 @@ class OneOfInterfaceInfo {
   /// PascalCase names of all subtypes participating in the discriminator
   /// mapping (e.g. ["EvmVault", "SolanaVault", ...]).
   final List<String> subtypeNames;
-
-  /// Camel-cased common property name → sorted names of this wrapper's
-  /// subtypes whose schema lacks it (they get a null stub). Absent when every
-  /// subtype declares the property.
-  final Map<String, List<String>> subtypesLacking;
 }
 
 /// Marks a subtype class that participates in a `oneOf` + `discriminator`

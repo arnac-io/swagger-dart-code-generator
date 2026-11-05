@@ -3,6 +3,7 @@
 //   • `implements IXxx` injection on each subtype
 //   • computed `active` getter and per-variant factories on the wrapper
 //   • `@override T? get foo => null;` stubs in subtypes missing a lax-common prop
+//   • dartdoc on promoted getters and stubs naming the variants that always return null
 //   • Transitive type unification (one wrapper's subtype implementing another wrapper's interface)
 //   • Edge cases: 1-subtype wrapper, 0-common-prop wrapper, enum-divergence rejection
 
@@ -59,10 +60,30 @@ SwaggerSchema _ref(String name) =>
 SwaggerSchema _objectWithProps(Map<String, SwaggerSchema> properties) =>
     SwaggerSchema(type: 'object', properties: properties);
 
+/// A `Container` wrapper over [present] subtypes declaring `id` and `shared`
+/// and [lacking] subtypes declaring only `id`, mapped in that order.
+Map<String, SwaggerSchema> _containerWithLacking({
+  required List<String> lacking,
+  required List<String> present,
+}) =>
+    {
+      for (final n in present)
+        n: _objectWithProps({'id': _string(), 'shared': _string()}),
+      for (final n in lacking) n: _objectWithProps({'id': _string()}),
+      'Container': _wrapper(
+        propertyName: 'type',
+        mapping: {
+          for (final n in [...lacking, ...present])
+            n.toLowerCase(): '#/components/schemas/$n',
+        },
+      ),
+    };
+
 SwaggerModelsGenerator _gen({
   bool overrideEquals = false,
   bool generateCopyWith = true,
   List<String> ignoredKeys = const [],
+  int? pageWidth,
 }) =>
     SwaggerModelsGeneratorV3(GeneratorOptions(
       inputFolder: '',
@@ -70,6 +91,7 @@ SwaggerModelsGenerator _gen({
       overrideEqualsAndHashcode: overrideEquals,
       generateCopyWith: generateCopyWith,
       ignoredKeys: ignoredKeys,
+      pageWidth: pageWidth,
     ));
 
 String _runGenerate(
@@ -77,11 +99,13 @@ String _runGenerate(
   bool overrideEquals = false,
   bool generateCopyWith = true,
   List<String> ignoredKeys = const [],
+  int? pageWidth,
 }) {
   final generator = _gen(
     overrideEquals: overrideEquals,
     generateCopyWith: generateCopyWith,
     ignoredKeys: ignoredKeys,
+    pageWidth: pageWidth,
   );
   return generator.generateBase(
     root: _root(schemas),
@@ -194,47 +218,107 @@ void main() {
       expect(aClassRegion,
           isNot(contains('@override String? get shared => null;')));
 
+      final iContainer = _extractClass(out, 'IContainer');
       expect(
-          _docAbove(_extractClass(out, 'IContainer'), 'String? get shared;'),
-          '/// Always null on [E]: its schema declares no `shared`.');
-      expect(_docAbove(_extractClass(out, 'IContainer'), 'String? get id;'),
-          isEmpty);
+          _docText(_docAbove(iContainer, 'String? get shared;')),
+          'Always null on [E]: its schema declares no `shared`. '
+          'Other variants may also return null.');
+      expect(_docAbove(iContainer, 'String? get id;'), isEmpty);
       expect(
           _docAbove(eClassRegion, '@override String? get shared => null;'),
-          '/// The schema declares no `shared` on this type; always null.');
+          "/// Always null: this type's schema declares no `shared`.");
     });
 
-    test('lacking variants are listed sorted and wrapped to 80 columns', () {
-      const lacking = [
-        'ZebraVeryLongSubtypeNameForWrapping',
-        'AardvarkVeryLongSubtypeNameForWrapping',
-      ];
-      final present = List.generate(8, (i) => 'Present$i');
-      final schemas = <String, SwaggerSchema>{
-        for (final n in present)
-          n: _objectWithProps({'id': _string(), 'shared': _string()}),
-        for (final n in lacking) n: _objectWithProps({'id': _string()}),
-        'Container': _wrapper(
-          propertyName: 'type',
-          mapping: {
-            for (final n in [...lacking, ...present])
-              n.toLowerCase(): '#/components/schemas/$n',
-          },
-        ),
-      };
+    test('three or more lacking variants are listed sorted, comma-separated',
+        () {
+      // 12 of 15 present meets the 80% threshold.
+      final schemas = _containerWithLacking(
+          lacking: ['C', 'A', 'B'],
+          present: List.generate(12, (i) => 'Present$i'));
 
       final doc = _docAbove(
           _extractClass(_runGenerate(schemas), 'IContainer'),
           'String? get shared;');
 
       expect(
-          doc.split('\n').map((l) => l.replaceFirst('/// ', '')).join(' '),
-          'Always null on [AardvarkVeryLongSubtypeNameForWrapping] and '
-          '[ZebraVeryLongSubtypeNameForWrapping]: their schemas declare no '
-          '`shared`.');
-      expect(doc.split('\n'), hasLength(greaterThan(1)));
-      expect(doc.split('\n').map((l) => '  $l'.length),
-          everyElement(lessThanOrEqualTo(80)));
+          _docText(doc),
+          'Always null on [A], [B] and [C]: their schemas declare no '
+          '`shared`. Other variants may also return null.');
+    });
+
+    test('a lacking variant mapped under two discriminator values is listed once',
+        () {
+      // 8 of 10 mapping entries present meets the 80% threshold.
+      final present = List.generate(8, (i) => 'Present$i');
+      final schemas = <String, SwaggerSchema>{
+        for (final n in present)
+          n: _objectWithProps({'id': _string(), 'shared': _string()}),
+        'E': _objectWithProps({'id': _string()}),
+        'Container': _wrapper(
+          propertyName: 'type',
+          mapping: {
+            for (final n in present) n.toLowerCase(): '#/components/schemas/$n',
+            'e1': '#/components/schemas/E',
+            'e2': '#/components/schemas/E',
+          },
+        ),
+      };
+
+      final out = _runGenerate(schemas);
+
+      expect(
+          _docText(_docAbove(
+              _extractClass(out, 'IContainer'), 'String? get shared;')),
+          startsWith('Always null on [E]: its schema declares'));
+      expect('get shared => null;'.allMatches(_extractClass(out, 'E')),
+          hasLength(1));
+    });
+
+    test('docs wrap greedily to the page width at member indent', () {
+      // 8 of 10 present meets the 80% threshold.
+      final schemas = _containerWithLacking(
+          lacking: [
+            'ZebraVeryLongSubtypeNameForWrapping',
+            'AardvarkVeryLongSubtypeNameForWrapping',
+          ],
+          present: List.generate(8, (i) => 'Present$i'));
+
+      String docAt(int? pageWidth) => _docAbove(
+          _extractClass(
+              _runGenerate(schemas, pageWidth: pageWidth), 'IContainer'),
+          'String? get shared;');
+
+      expect(docAt(null).split('\n'), [
+        '/// Always null on [AardvarkVeryLongSubtypeNameForWrapping] and',
+        '/// [ZebraVeryLongSubtypeNameForWrapping]: their schemas declare no `shared`.',
+        '/// Other variants may also return null.',
+      ]);
+      expect(docAt(120).split('\n'), [
+        '/// Always null on [AardvarkVeryLongSubtypeNameForWrapping] and '
+            '[ZebraVeryLongSubtypeNameForWrapping]: their schemas',
+        '/// declare no `shared`. Other variants may also return null.',
+      ]);
+    });
+
+    test('a stub doc wraps to the page width', () {
+      const key = 'a_very_long_property_name_that_overflows';
+      // 4 of 5 present meets the 80% threshold.
+      final schemas = <String, SwaggerSchema>{
+        for (final n in ['A', 'B', 'C', 'D'])
+          n: _objectWithProps({'id': _string(), key: _string()}),
+        'E': _objectWithProps({'id': _string()}),
+        'Container': _wrapper(propertyName: 'type', mapping: {
+          for (final n in ['A', 'B', 'C', 'D', 'E'])
+            n.toLowerCase(): '#/components/schemas/$n',
+        }),
+      };
+
+      final stub = _extractClass(_runGenerate(schemas), 'E');
+
+      expect(_docAbove(stub, '=> null;').split('\n'), [
+        "/// Always null: this type's schema declares no",
+        '/// `$key`.',
+      ]);
     });
 
     test('a subtype shared by two wrappers is attributed per interface', () {
@@ -242,6 +326,7 @@ void main() {
           _objectWithProps({for (final p in props) p: _string()});
       Map<String, String> mapping(List<String> names) =>
           {for (final n in names) n.toLowerCase(): '#/components/schemas/$n'};
+      // W1: 4 of 5 and W2: 8 of 10 declare `p`, each meeting the 80% threshold.
       final w1Present = List.generate(4, (i) => 'P$i');
       final w2Present = List.generate(8, (i) => 'Q$i');
       final schemas = <String, SwaggerSchema>{
@@ -258,11 +343,14 @@ void main() {
       final out = _runGenerate(schemas);
       final shared = _extractClass(out, 'Shared');
 
-      expect(_docAbove(_extractClass(out, 'IW1'), 'String? get p;'),
-          '/// Always null on [Shared]: its schema declares no `p`.');
-      expect(_docAbove(_extractClass(out, 'IW2'), 'String? get p;'),
-          '/// Always null on [K] and [Shared]: their schemas declare no `p`.');
-      expect(shared, contains('implements IW2, IW1'));
+      expect(_docText(_docAbove(_extractClass(out, 'IW1'), 'String? get p;')),
+          startsWith('Always null on [Shared]: its schema declares no `p`.'));
+      expect(
+          _docText(_docAbove(_extractClass(out, 'IW2'), 'String? get p;')),
+          startsWith(
+              'Always null on [K] and [Shared]: their schemas declare no `p`.'));
+      final header = shared.substring(0, shared.indexOf('{'));
+      expect(header, allOf(contains('IW1'), contains('IW2')));
       expect(
           '@override String? get p => null;'.allMatches(shared), hasLength(1));
     });
@@ -697,18 +785,6 @@ void main() {
 /// certain code is INSIDE a particular class (not just somewhere in the file).
 /// Returns the substring from `class <name>` up to the matching closing
 /// brace of that class.
-/// The trimmed `///` lines directly above the first line containing [member].
-String _docAbove(String region, String member) {
-  final lines = region.split('\n');
-  final at = lines.indexWhere((l) => l.contains(member));
-  if (at == -1) throw StateError('$member not found in:\n$region');
-  final doc = <String>[];
-  for (var i = at - 1; i >= 0 && lines[i].trim().startsWith('///'); i--) {
-    doc.insert(0, lines[i].trim());
-  }
-  return doc.join('\n');
-}
-
 String _extractClass(String output, String className) {
   final marker = RegExp('class\\s+$className(\\s+implements[^{]*)?\\s*\\{');
   final match = marker.firstMatch(output);
@@ -727,3 +803,19 @@ String _extractClass(String output, String className) {
   }
   return output.substring(match.start, i);
 }
+
+/// The trimmed `///` lines directly above the first line containing [member].
+String _docAbove(String region, String member) {
+  final lines = region.split('\n');
+  final at = lines.indexWhere((l) => l.contains(member));
+  if (at == -1) throw StateError('$member not found in:\n$region');
+  final doc = <String>[];
+  for (var i = at - 1; i >= 0 && lines[i].trim().startsWith('///'); i--) {
+    doc.insert(0, lines[i].trim());
+  }
+  return doc.join('\n');
+}
+
+/// The text of a `///` block from [_docAbove], unwrapped into one line.
+String _docText(String doc) =>
+    doc.split('\n').map((l) => l.replaceFirst('/// ', '')).join(' ');
