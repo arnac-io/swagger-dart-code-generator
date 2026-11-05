@@ -193,6 +193,78 @@ void main() {
       final aClassRegion = _extractClass(out, 'A');
       expect(aClassRegion,
           isNot(contains('@override String? get shared => null;')));
+
+      expect(
+          _docAbove(_extractClass(out, 'IContainer'), 'String? get shared;'),
+          '/// Always null on [E]: its schema declares no `shared`.');
+      expect(_docAbove(_extractClass(out, 'IContainer'), 'String? get id;'),
+          isEmpty);
+      expect(
+          _docAbove(eClassRegion, '@override String? get shared => null;'),
+          '/// The schema declares no `shared` on this type; always null.');
+    });
+
+    test('lacking variants are listed sorted and wrapped to 80 columns', () {
+      const lacking = [
+        'ZebraVeryLongSubtypeNameForWrapping',
+        'AardvarkVeryLongSubtypeNameForWrapping',
+      ];
+      final present = List.generate(8, (i) => 'Present$i');
+      final schemas = <String, SwaggerSchema>{
+        for (final n in present)
+          n: _objectWithProps({'id': _string(), 'shared': _string()}),
+        for (final n in lacking) n: _objectWithProps({'id': _string()}),
+        'Container': _wrapper(
+          propertyName: 'type',
+          mapping: {
+            for (final n in [...lacking, ...present])
+              n.toLowerCase(): '#/components/schemas/$n',
+          },
+        ),
+      };
+
+      final doc = _docAbove(
+          _extractClass(_runGenerate(schemas), 'IContainer'),
+          'String? get shared;');
+
+      expect(
+          doc.split('\n').map((l) => l.replaceFirst('/// ', '')).join(' '),
+          'Always null on [AardvarkVeryLongSubtypeNameForWrapping] and '
+          '[ZebraVeryLongSubtypeNameForWrapping]: their schemas declare no '
+          '`shared`.');
+      expect(doc.split('\n'), hasLength(greaterThan(1)));
+      expect(doc.split('\n').map((l) => '  $l'.length),
+          everyElement(lessThanOrEqualTo(80)));
+    });
+
+    test('a subtype shared by two wrappers is attributed per interface', () {
+      SwaggerSchema obj(List<String> props) =>
+          _objectWithProps({for (final p in props) p: _string()});
+      Map<String, String> mapping(List<String> names) =>
+          {for (final n in names) n.toLowerCase(): '#/components/schemas/$n'};
+      final w1Present = List.generate(4, (i) => 'P$i');
+      final w2Present = List.generate(8, (i) => 'Q$i');
+      final schemas = <String, SwaggerSchema>{
+        for (final n in [...w1Present, ...w2Present]) n: obj(['id', 'p']),
+        'Shared': obj(['id']),
+        'K': obj(['id']),
+        'W2': _wrapper(
+            propertyName: 'type',
+            mapping: mapping(['Shared', 'K', ...w2Present])),
+        'W1': _wrapper(
+            propertyName: 'type', mapping: mapping(['Shared', ...w1Present])),
+      };
+
+      final out = _runGenerate(schemas);
+      final shared = _extractClass(out, 'Shared');
+
+      expect(_docAbove(_extractClass(out, 'IW1'), 'String? get p;'),
+          '/// Always null on [Shared]: its schema declares no `p`.');
+      expect(_docAbove(_extractClass(out, 'IW2'), 'String? get p;'),
+          '/// Always null on [K] and [Shared]: their schemas declare no `p`.');
+      expect(shared, contains('implements IW2, IW1'));
+      expect(
+          '@override String? get p => null;'.allMatches(shared), hasLength(1));
     });
   });
 
@@ -625,6 +697,18 @@ void main() {
 /// certain code is INSIDE a particular class (not just somewhere in the file).
 /// Returns the substring from `class <name>` up to the matching closing
 /// brace of that class.
+/// The trimmed `///` lines directly above the first line containing [member].
+String _docAbove(String region, String member) {
+  final lines = region.split('\n');
+  final at = lines.indexWhere((l) => l.contains(member));
+  if (at == -1) throw StateError('$member not found in:\n$region');
+  final doc = <String>[];
+  for (var i = at - 1; i >= 0 && lines[i].trim().startsWith('///'); i--) {
+    doc.insert(0, lines[i].trim());
+  }
+  return doc.join('\n');
+}
+
 String _extractClass(String output, String className) {
   final marker = RegExp('class\\s+$className(\\s+implements[^{]*)?\\s*\\{');
   final match = marker.firstMatch(output);
