@@ -72,7 +72,7 @@ targets:
 | **`input_folder`** | **`-`** | **`true`** | **Path to folder with .swagger files (for ex. swagger_examples, or lib/swaggers).** |
 | **`output_folder`** | **`-`** | **`true`** | **Path to output folder (for ex. lib/generated).** |
 | `input_urls` | `[]` | `false` | Here you can mention list of files to be downloaded from the internet. You can check [example](https://github.com/epam-cross-platform-lab/swagger-dart-code-generator/blob/master/example/build.yaml) of usage. |
-| `with_base_url` | `true` | `false` | If this option is false, generator will ignore base url in swagger file. |
+| `with_base_url` | `true` | `false` | No effect: the generated `create()` always requires a `baseUrl` and never falls back to the swagger file's host. |
 | `use_required_attribute_for_headers` | `true` | `false` | If this option is false, generator will not add @required attribute to headers. |
 | `with_converter` | `true` | `false` | If option is true, combination of all mappings will be generated. |
 | `ignore_headers` | `false` | `false` | If option is true, headers will not be generated. |

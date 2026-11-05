@@ -62,5 +62,24 @@ void main() {
       expect(result,
           contains('Future<chopper.Response<CarModel>> carsMultipartPost'));
     });
+
+    test('create() requires a base URL and keeps the existing reporter when given none', () {
+      final result = SwaggerRequestsGenerator(GeneratorOptions(
+        inputFolder: '',
+        outputFolder: '',
+      )).generate(
+        swaggerRoot: root,
+        className: 'CarsService',
+        fileName: 'cars_service',
+        allEnums: [],
+      );
+
+      final normalized = result.replaceAll(RegExp(r'\s+'), ' ');
+      expect(normalized, contains('required Uri baseUrl'));
+      expect(normalized, contains('baseUrl: baseUrl)'));
+      expect(normalized, isNot(contains('Uri.parse(')));
+      expect(normalized,
+          contains('if(reporter!=null){ SwaggerReporterHelper.setReporter(reporter); }'));
+    });
   });
 }
