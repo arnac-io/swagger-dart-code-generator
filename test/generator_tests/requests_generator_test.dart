@@ -63,23 +63,32 @@ void main() {
           contains('Future<chopper.Response<CarModel>> carsMultipartPost'));
     });
 
-    test('create() requires a base URL and keeps the existing reporter when given none', () {
-      final result = SwaggerRequestsGenerator(GeneratorOptions(
-        inputFolder: '',
-        outputFolder: '',
-      )).generate(
-        swaggerRoot: root,
-        className: 'CarsService',
-        fileName: 'cars_service',
-        allEnums: [],
-      );
+    String generateCarsService() => SwaggerRequestsGenerator(GeneratorOptions(
+          inputFolder: '',
+          outputFolder: '',
+        )).generate(
+          swaggerRoot: root,
+          className: 'CarsService',
+          fileName: 'cars_service',
+          allEnums: [],
+        );
 
-      final normalized = result.replaceAll(RegExp(r'\s+'), ' ');
-      expect(normalized, contains('required Uri baseUrl'));
-      expect(normalized, contains('baseUrl: baseUrl)'));
-      expect(normalized, isNot(contains('Uri.parse(')));
-      expect(normalized,
-          contains('if(reporter!=null){ SwaggerReporterHelper.setReporter(reporter); }'));
+    String withoutWhitespace(String code) => code.replaceAll(RegExp(r'\s'), '');
+
+    test('create() requires baseUrl and has no spec-host fallback', () {
+      final code = withoutWhitespace(generateCarsService());
+
+      expect(code, contains('requiredUribaseUrl'));
+      expect(code, contains('baseUrl:baseUrl)'));
+      expect(code, isNot(contains('Uri.parse(')));
+    });
+
+    test('create() sets the reporter only when one is passed', () {
+      final code = withoutWhitespace(generateCarsService());
+
+      expect(code,
+          contains('if(reporter!=null){SwaggerReporterHelper.setReporter(reporter);}'));
+      expect('setReporter('.allMatches(code), hasLength(1));
     });
   });
 }
