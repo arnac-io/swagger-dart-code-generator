@@ -52,11 +52,7 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
       allEnums: allEnums,
     );
 
-    final chopperClient = getChopperClientContent(
-      className,
-      swaggerRoot.host,
-      swaggerRoot.basePath
-    );
+    final chopperClient = getChopperClientContent(className);
 
     return Class(
       (c) => c
@@ -78,6 +74,8 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
         ..returns = Reference(className)
         ..name = 'create'
         ..static = true
+        ..docs.add(
+            '///When `client` is given, only `reporter` is used; every other argument is ignored.')
         ..optionalParameters.add(Parameter(
           (p) => p
             ..named = true
@@ -111,7 +109,8 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
         ..optionalParameters.add(Parameter(
           (p) => p
             ..named = true
-            ..type = Reference('Uri?')
+            ..required = true
+            ..type = Reference('Uri')
             ..name = 'baseUrl',
         ))
         ..optionalParameters.add(Parameter(
@@ -1409,23 +1408,17 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
     return '';
   }
 
-  String getChopperClientContent(
-    String className,
-    String host,
-    String basePath,
-  ) {
-    final baseUrlString = options.withBaseUrl
-        ? "baseUrl:  baseUrl ?? Uri.parse('http://$host$basePath')"
-        : 'baseUrl: baseUrl';
-
+  String getChopperClientContent(String className) {
     final converterString = options.withConverter
         ? 'converter: converter ?? \$JsonSerializableConverter(),'
         : 'converter: converter ?? chopper.JsonConverter(),';
 
-    final reporterAssignment = '    SwaggerReporterHelper.setReporter(reporter);\n';
-
+    // The reporter is a process-wide static; a client created without one must not clear it.
     final chopperClientBody = '''
-    $reporterAssignment
+    if(reporter!=null){
+      SwaggerReporterHelper.setReporter(reporter);
+    }
+
     if(client!=null){
       return _\$$className(client);
     }
@@ -1437,7 +1430,7 @@ class SwaggerRequestsGenerator extends SwaggerGeneratorBase {
       client: httpClient,
       authenticator: authenticator,
       errorConverter: errorConverter,
-      $baseUrlString);
+      baseUrl: baseUrl);
     return _\$$className(newClient);
 ''';
     return chopperClientBody;
