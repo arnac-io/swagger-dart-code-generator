@@ -1790,9 +1790,20 @@ $copyWithMethod
 
   /// Emits the `sealed class IXxx { ... }` block that lives next to a wrapper.
   String _generateSealedInterfaceBlock(OneOfInterfaceInfo info) {
-    final getters = info.commonProps
-        .map((p) => '\t${p.dartType}? get ${p.camelName};')
-        .join('\n');
+    final getters = info.commonProps.map((p) {
+      final getter = '\t${p.dartType}? get ${p.camelName};';
+      final names = _subtypesLacking(info, p).map((n) => '[$n]').toList();
+      if (names.isEmpty) return getter;
+      final variantList = names.length == 1
+          ? names.single
+          : '${names.sublist(0, names.length - 1).join(', ')} and ${names.last}';
+      final declareClause =
+          names.length == 1 ? 'its schema declares' : 'their schemas declare';
+      final doc = _wrapDocComment(
+          'Always null on $variantList: $declareClause no `${p.snakeName}`. '
+          'Other variants may also return null.');
+      return '$doc\n$getter';
+    }).join('\n');
     return '''
 /// Common contract for all subtypes of [${info.wrapperName}], generated from
 /// the OpenAPI `oneOf` + `discriminator` declaration. All subtypes
@@ -1802,6 +1813,36 @@ sealed class ${info.interfaceName} {
 $getters
 }
 ''';
+  }
+
+  /// Sorted names of [info]'s subtypes whose schema lacks [p], i.e. the ones
+  /// that get a null stub for it.
+  List<String> _subtypesLacking(OneOfInterfaceInfo info, OneOfCommonProp p) => [
+        for (final e in _oneOfSubtypes.entries)
+          if (e.value.any(
+              (m) => m.interface == info && m.missingProps.contains(p)))
+            e.key,
+      ]..sort();
+
+  /// Word-wraps [text] at word boundaries into tab-indented `///` lines that
+  /// fit the page width once formatted at member indent; a single word longer
+  /// than a line is not split.
+  String _wrapDocComment(String text) {
+    const prefix = '\t/// ';
+    // dart format turns the tab into a two-space member indent.
+    final width = (options.pageWidth ?? 80) - 2 - 4;
+    final lines = <String>[];
+    var line = '';
+    for (final word in text.split(' ')) {
+      if (line.isNotEmpty && line.length + 1 + word.length > width) {
+        lines.add('$prefix$line');
+        line = word;
+      } else {
+        line = line.isEmpty ? word : '$line $word';
+      }
+    }
+    if (line.isNotEmpty) lines.add('$prefix$line');
+    return lines.join('\n');
   }
 
   /// Emits the wrapper's `active` getter: the first non-null variant field.
@@ -1846,6 +1887,8 @@ $getters
     for (final m in ms) {
       for (final p in m.missingProps) {
         if (!seen.add(p.camelName)) continue;
+        lines.add(_wrapDocComment(
+            "Always null: this type's schema declares no `${p.snakeName}`."));
         lines.add('\t@override ${p.dartType}? get ${p.camelName} => null;');
       }
     }
